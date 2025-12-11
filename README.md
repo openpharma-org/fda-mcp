@@ -1,7 +1,4 @@
-# FDA MCP Server
-
-[![npm version](https://badge.fury.io/js/%40uh-joan%2Ffda-mcp-server.svg)](https://badge.fury.io/js/%40uh-joan%2Ffda-mcp-server)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+# Unofficial FDA MCP Server
 
 A comprehensive Model Context Protocol (MCP) server that provides advanced pharmaceutical intelligence through the FDA's openFDA database. This server combines real-time data access, intelligent analysis prompts, and executive-level resources to deliver actionable insights for drug safety, regulatory intelligence, competitive analysis, and supply chain risk assessment.
 
@@ -34,21 +31,36 @@ A comprehensive Model Context Protocol (MCP) server that provides advanced pharm
 - 🔧 **Settings Management**: Comprehensive configuration system with validation and fallbacks
 - 📊 **Dynamic Registration**: Components register conditionally based on configuration settings
 
-## Installation
-
-### Option 1: Install from NPM
+## 🚀 **Quick Start**
 
 ```bash
-npm install -g @openpharma-org/fda-mcp
+# Install and build
+npm install
+npm run build
+
+# Run the server
+node build/index.js
 ```
 
-### Option 2: Install from Source
+## 📋 **MCP Client Configuration**
+
+### Claude Desktop
+
+```json
+{
+  "mcpServers": {
+    "opentargets-server": {
+      "command": "node",
+      "args": ["/path/to/fda-server/build/index.js"]
+    }
+  }
+}
+```
+
+### Other MCP Clients
 
 ```bash
-git clone https://github.com/openpharma-org/fda-mcp.git
-cd fda-mcp-server
-npm install
-npm link
+node /path/to/fda-server/build/index.js
 ```
 
 ## Configuration
@@ -56,12 +68,6 @@ npm link
 ### Claude Desktop Integration
 
 Add the following to your Claude Desktop configuration file:
-
-**Location:**
-- **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
-- **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
-
-**Configuration:**
 
 ```json
 {
