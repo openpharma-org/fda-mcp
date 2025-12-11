@@ -1,0 +1,2931 @@
+#!/usr/bin/env node
+
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import {
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+  ListPromptsRequestSchema,
+  GetPromptRequestSchema,
+} from '@modelcontextprotocol/sdk/types.js';
+import { lookupDrug, lookupDevice } from './fda-search.js';
+
+const server = new Server(
+  {
+    name: 'fda-mcp-server',
+    version: '0.3.3',
+  },
+  {
+    capabilities: {
+      tools: {},
+      prompts: {},
+    },
+  }
+);
+
+// List available tools
+server.setRequestHandler(ListToolsRequestSchema, async () => {
+  return {
+    tools: [
+      {
+        name: 'fda_info',
+        description: 'Unified tool for FDA drug and medical device information lookup. Access drug labels, adverse events, regulatory information, recalls, shortages, and device registration data from the openFDA database.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            method: {
+              type: 'string',
+              enum: ['lookup_drug', 'lookup_device'],
+              description: 'The operation to perform: lookup_drug (search across multiple relevant fields, or search a specific field if field parameter is provided), lookup_device (search device registration and listing data)'
+            },
+            search_term: {
+              type: 'string',
+              description: 'Search term to look for in the FDA database. Can be a drug name (generic or brand), manufacturer name, dosage form, marketing status, or any other searchable value. Supports wildcards (*), phrase matches ("term"), boolean operators (AND, OR), field combinations, date ranges, and special modifiers (_missing_, _exists_). Examples: Simple: "aspirin", "PFIZER"; Field searches: "sponsor_name:PFIZER", "products.brand_name:VISTARIL"; Complex: "sponsor_name:\\"PFIZER\\"+AND+products.dosage_form:\\"CAPSULE\\"", "(products.dosage_form:\\"TABLET\\"+OR+products.dosage_form:\\"CAPSULE\\")+AND+sponsor_name:\\"PFIZER\\"; Date ranges: "receivedate:[20240101+TO+20241231]", "receivedate:[20240815+TO+20240915]+AND+patient.drug.medicinalproduct:semaglutide"'
+            },
+            search_type: {
+              type: 'string',
+              enum: ['general', 'label', 'adverse_events', 'recalls', 'shortages', 'device_registration', 'device_pma', 'device_510k', 'device_udi', 'device_recalls', 'device_adverse_events', 'device_classification'],
+              default: 'general',
+              description: 'Type of information to retrieve. For drugs: "general" for comprehensive search, "label" for prescribing information, "adverse_events" for safety data, "recalls" for drug recalls, "shortages" for supply shortages. For devices: "device_registration" for medical device registration and listing data, "device_pma" for Pre-Market Approval (PMA) decisions and submissions, "device_510k" for 510(k) premarket notification clearances, "device_udi" for Unique Device Identifier (UDI) database information, "device_recalls" for device recalls and enforcement reports, "device_adverse_events" for medical device adverse event reports, "device_classification" for device classification and regulatory information'
+            },
+            fields_for_general: {
+              type: 'string',
+              description: `Optional field to search within general drug data. Common categories:
+• Top-level: application_number, sponsor_name
+• OpenFDA: openfda.brand_name, openfda.generic_name, openfda.manufacturer_name, openfda.route, openfda.product_type
+• Products: products.active_ingredients.name, products.dosage_form, products.marketing_status, products.brand_name
+• Submissions: submissions.submission_status, submissions.review_priority, submissions.application_docs.date, submissions.application_docs.type
+See examples for usage patterns.`,
+              enum: [
+                'application_number',
+                'sponsor_name',
+                'openfda.application_number',
+                'openfda.brand_name',
+                'openfda.generic_name',
+                'openfda.manufacturer_name',
+                'openfda.nui',
+                'openfda.package_ndc',
+                'openfda.pharm_class_cs',
+                'openfda.pharm_class_epc',
+                'openfda.pharm_class_pe',
+                'openfda.pharm_class_moa',
+                'openfda.product_ndc',
+                'openfda.product_type',
+                'openfda.route',
+                'openfda.rxcui',
+                'openfda.spl_id',
+                'openfda.spl_set_id',
+                'openfda.substance_name',
+                'openfda.unii',
+                'openfda.upc',
+                'openfda.dosage_form',
+                'openfda.is_original_packager',
+                'openfda.original_packager_product_ndc',
+                'products.active_ingredients.name',
+                'products.active_ingredients.strength',
+                'products.brand_name',
+                'products.dosage_form',
+                'products.marketing_status',
+                'products.product_number',
+                'products.reference_drug',
+                'products.reference_standard',
+                'products.route',
+                'products.te_code',
+                'submissions.application_docs.date',
+                'submissions.application_docs.type',
+                'submissions.application_docs.url',
+                'submissions.review_priority',
+                'submissions.submission_class_code',
+                'submissions.submission_class_code_description',
+                'submissions.submission_number',
+                'submissions.submission_property_type.code',
+                'submissions.submission_public_notes',
+                'submissions.submission_status',
+                'submissions.submission_status_date',
+                'submissions.submission_type'
+              ]
+            },
+            fields_for_adverse_events: {
+              type: 'string',
+              description: `Optional field to search within adverse events data. Common categories:
+• Report Info: serious, occurcountry, receiptdate, safetyreportid
+• Patient: patient.patientsex, patient.patientonsetage, patient.patientweight
+• Drug: patient.drug.medicinalproduct, patient.drug.drugindication, patient.drug.drugcharacterization
+• Reactions: patient.reaction.reactionmeddrapt, patient.reaction.reactionoutcome
+See examples for usage patterns.`,
+              enum: [
+                'authoritynumb',
+                'companynumb',
+                'duplicate',
+                'fulfillexpeditecriteria',
+                'occurcountry',
+                'receiptdate',
+                'receiptdateformat',
+                'receivedate',
+                'receivedateformat',
+                'reporttype',
+                'safetyreportid',
+                'safetyreportversion',
+                'serious',
+                'transmissiondate',
+                'transmissiondateformat',
+                'patient.drug.actiondrug',
+                'patient.drug.activesubstance.activesubstancename',
+                'patient.drug.drugadditional',
+                'patient.drug.drugauthorizationnumb',
+                'patient.drug.drugbatchnumb',
+                'patient.drug.drugcharacterization',
+                'patient.drug.drugcumulativedosagenumb',
+                'patient.drug.drugcumulativedosageunit',
+                'patient.drug.drugdosagetext',
+                'patient.drug.drugenddate',
+                'patient.drug.drugenddateformat',
+                'patient.drug.drugindication',
+                'patient.drug.drugintervaldosagedefinition',
+                'patient.drug.drugintervaldosageunitnumb',
+                'patient.drug.medicinalproduct',
+                'patient.drug.drugrecurreadministration',
+                'patient.drug.drugrecurrence',
+                'patient.drug.drugseparatedosagenumb',
+                'patient.drug.drugstartdate',
+                'patient.drug.drugstartdateformat',
+                'patient.drug.drugstructuredosagenumb',
+                'patient.drug.drugstructuredosageunit',
+                'patient.drug.drugtreatmentduration',
+                'patient.drug.drugtreatmentdurationunit',
+                'patient.patientagegroup',
+                'patient.patientdeath.patientdeathdate',
+                'patient.patientdeath.patientdeathdateformat',
+                'patient.patientonsetage',
+                'patient.patientonsetageunit',
+                'patient.patientsex',
+                'patient.patientweight',
+                'patient.reaction.reactionmeddrapt',
+                'patient.reaction.reactionmeddraversionpt',
+                'patient.reaction.reactionoutcome',
+                'patient.summary.narrativeincludeclinical',
+                'primarysource.literaturereference',
+                'primarysource.qualification',
+                'primarysource.reportercountry',
+                'primarysource.primarysourcecountry',
+                'receiver.receiverorganization',
+                'receiver.receivertype',
+                'reportduplicate.duplicatenumb',
+                'reportduplicate.duplicatesource',
+                'sender.senderorganization',
+                'sender.sendertype',
+                'seriousnesscongenitalanomali',
+                'seriousnessdeath',
+                'seriousnessdisabling',
+                'seriousnesshospitalization',
+                'seriousnesslifethreatening',
+                'seriousnessother'
+              ]
+            },
+            fields_for_label: {
+              type: 'string',
+              description: `Optional field to search within drug labels. Common categories:
+• Clinical: warnings, indications_and_usage, dosage_and_administration, contraindications, drug_interactions
+• Populations: pediatric_use, geriatric_use, pregnancy, hepatic_impairment, renal_impairment
+• Product Info: openfda.brand_name, openfda.generic_name, boxed_warning, how_supplied
+• Safety: adverse_reactions, overdosage, controlled_substance, abuse
+See examples for usage patterns.`,
+              enum: [
+                'effective_time',
+                'inactive_ingredient',
+                'spl_product_data_elements',
+                'purpose',
+                'version',
+                'ask_doctor',
+                'ask_doctor_or_pharmacist',
+                'do_not_use',
+                'openfda.application_number',
+                'openfda.brand_name',
+                'openfda.generic_name',
+                'openfda.manufacturer_name',
+                'openfda.product_ndc',
+                'openfda.product_type',
+                'openfda.route',
+                'openfda.substance_name',
+                'openfda.rxcui',
+                'openfda.spl_id',
+                'openfda.spl_set_id',
+                'openfda.package_ndc',
+                'openfda.nui',
+                'openfda.pharm_class_epc',
+                'openfda.pharm_class_pe',
+                'openfda.pharm_class_moa',
+                'openfda.pharm_class_cs',
+                'openfda.unii',
+                'warnings',
+                'indications_and_usage',
+                'dosage_and_administration',
+                'dosage_forms_and_strengths',
+                'contraindications',
+                'warnings_and_cautions',
+                'adverse_reactions',
+                'drug_interactions',
+                'use_in_specific_populations',
+                'drug_abuse_and_dependence',
+                'overdosage',
+                'description',
+                'clinical_pharmacology',
+                'nonclinical_toxicology',
+                'clinical_studies',
+                'references',
+                'how_supplied',
+                'storage_and_handling',
+                'patient_counseling_information',
+                'boxed_warning',
+                'recent_major_changes',
+                'brand_name_base',
+                'generic_name_base',
+                'labeler_name',
+                'product_id',
+                'product_ndc',
+                'application_number',
+                'sponsor_name',
+                'fullname',
+                'appl_type',
+                'appl_no',
+                'product_no',
+                'te_code',
+                'approval_date',
+                'rld',
+                'type',
+                'applicant',
+                'strength',
+                'df_route',
+                'trade_name',
+                'applicant_full_name',
+                'dosage_form',
+                'marketing_status',
+                'chemical_name',
+                'active_ingredient',
+                'drug_name',
+                'manufacturer_name',
+                'pharm_class',
+                'indication_class',
+                'schedule',
+                'nda_number',
+                'application_type',
+                'submission_type',
+                'submission_number',
+                'submission_status',
+                'submission_status_date',
+                'marketing_category',
+                'dosage_form_name',
+                'route_name',
+                'marketing_category_name',
+                'pharm_class_epc',
+                'pharm_class_pe',
+                'pharm_class_moa',
+                'pharm_class_cs',
+                'dea_schedule',
+                'listing_expiration_date',
+                'openfda.is_original_packager',
+                'openfda.upc',
+                'set_id',
+                'id',
+                'spl_version',
+                'document_type',
+                'effective_date',
+                'version_number',
+                'pregnancy_or_breast_feeding',
+                'geriatric_use',
+                'pediatric_use',
+                'animal_pharmacology_and_or_toxicology',
+                'controlled_substance',
+                'abuse',
+                'dependence',
+                'carcinogenesis_and_mutagenesis_and_impairment_of_fertility',
+                'pregnancy',
+                'labor_and_delivery',
+                'nursing_mothers',
+                'information_for_patients',
+                'laboratory_tests',
+                'carcinogenesis_mutagenesis_impairment_of_fertility',
+                'teratogenic_effects',
+                'nonteratogenic_effects',
+                'labor_delivery',
+                'nursing_mothers_subsection',
+                'pediatric_use_subsection',
+                'geriatric_use_subsection',
+                'hepatic_impairment',
+                'renal_impairment',
+                'female_and_male_of_reproductive_potential',
+                'lactation',
+                'females_and_males_of_reproductive_potential',
+                'pediatric_patients',
+                'geriatric_patients',
+                'hepatic_impairment_subsection',
+                'renal_impairment_subsection',
+                'immunocompromised_patients',
+                'race_ethnicity',
+                'keep_out_of_reach_of_children',
+                'questions',
+                'package_label_principal_display_panel',
+                'spl_medguide',
+                'spl_patient_package_insert',
+                'information_for_the_patient',
+                'instructions_for_use',
+                'medication_guide',
+                'user_safety_warnings',
+                'precautions',
+                'when_using',
+                'stop_use',
+                'pregnancy_breast_feeding',
+                'keep_out_of_reach',
+                'directions',
+                'other_information',
+                'principal_display_panel',
+                'active_ingredient_section',
+                'inactive_ingredient_section',
+                'warnings_section',
+                'when_using_section',
+                'stop_use_section',
+                'directions_section',
+                'other_information_section',
+                'questions_section',
+                'package_label_section',
+                'carton_labeling',
+                'container_labeling',
+                'blister_pack_labeling',
+                'bottle_labeling',
+                'tube_labeling',
+                'pouch_labeling',
+                'syringe_labeling',
+                'vial_labeling',
+                'ampule_labeling',
+                'prefilled_syringe_labeling'
+              ]
+            },
+            fields_for_recalls: {
+              type: 'string',
+              description: `Optional field to search within drug recalls and enforcement reports. Common categories:
+• Recall Info: recalling_firm, classification, status, reason_for_recall, product_type, voluntary_mandated
+• Product Details: product_description, code_info, more_code_info, product_quantity, distribution_pattern
+• Timeline: report_date, recall_initiation_date, center_classification_date, termination_date, initial_firm_notification
+• Tracking: recall_number, event_id
+• Geographic: address_1, address_2, city, state, country, postal_code
+• OpenFDA: openfda.brand_name, openfda.generic_name, openfda.manufacturer_name, openfda.product_ndc
+See examples for usage patterns.`,
+              enum: [
+                'recalling_firm',
+                'classification',
+                'status',
+                'distribution_pattern',
+                'product_description',
+                'code_info',
+                'more_code_info',
+                'reason_for_recall',
+                'product_quantity',
+                'voluntary_mandated',
+                'report_date',
+                'recall_initiation_date',
+                'center_classification_date',
+                'termination_date',
+                'initial_firm_notification',
+                'recall_number',
+                'event_id',
+                'product_type',
+                'address_1',
+                'address_2',
+                'city',
+                'state',
+                'country',
+                'postal_code',
+                'openfda.application_number',
+                'openfda.brand_name',
+                'openfda.generic_name',
+                'openfda.manufacturer_name',
+                'openfda.nui',
+                'openfda.package_ndc',
+                'openfda.pharm_class_cs',
+                'openfda.pharm_class_epc',
+                'openfda.pharm_class_pe',
+                'openfda.pharm_class_moa',
+                'openfda.product_ndc',
+                'openfda.route',
+                'openfda.rxcui',
+                'openfda.spl_id',
+                'openfda.spl_set_id',
+                'openfda.substance_name',
+                'openfda.unii',
+                'openfda.upc'
+              ]
+            },
+            fields_for_shortages: {
+              type: 'string',
+              description: `Optional field to search within drug shortages data. Common categories:
+• Product Info: generic_name, proprietary_name, brand_name, company_name, product_id, presentation
+• Shortage Details: status, availability, shortage_reason, therapeutic_category, resolved_note
+• Timeline: update_date, change_date, discontinued_date, initial_posting_date, update_type
+• Contact & Links: contact_info, related_info, related_info_link
+• Technical: package_ndc, dosage_form, strength
+• OpenFDA: openfda.application_number, openfda.brand_name, openfda.generic_name, openfda.manufacturer_name, openfda.product_ndc, openfda.route, openfda.substance_name
+See examples for usage patterns.`,
+              enum: [
+                'package_ndc',
+                'generic_name',
+                'proprietary_name',
+                'company_name',
+                'contact_info',
+                'presentation',
+                'product_id',
+                'update_type',
+                'availability',
+                'related_info',
+                'related_info_link',
+                'resolved_note',
+                'shortage_reason',
+                'therapeutic_category',
+                'dosage_form',
+                'strength',
+                'status',
+                'update_date',
+                'change_date',
+                'discontinued_date',
+                'initial_posting_date',
+                'openfda.application_number',
+                'openfda.brand_name',
+                'openfda.dosage_form',
+                'openfda.generic_name',
+                'openfda.is_original_packager',
+                'openfda.manufacturer_name',
+                'openfda.nui',
+                'openfda.original_packager_product_ndc',
+                'openfda.package_ndc',
+                'openfda.pharm_class_cs',
+                'openfda.pharm_class_epc',
+                'openfda.pharm_class_moa',
+                'openfda.pharm_class_pe',
+                'openfda.product_ndc',
+                'openfda.product_type',
+                'openfda.route',
+                'openfda.rxcui',
+                'openfda.spl_id',
+                'openfda.spl_set_id',
+                'openfda.substance_name',
+                'openfda.unii',
+                'openfda.upc'
+              ]
+            },
+            fields_for_device_registration: {
+              type: 'string',
+              description: `Optional field to search within device registration and listing data. Common categories:
+• Device Info: proprietary_name, establishment_type, pma_number, k_number
+• Registration: registration.registration_number, registration.fei_number, registration.name, registration.status_code
+• Location: registration.city, registration.state_code, registration.iso_country_code, registration.zip_code
+• Products: products.product_code, products.created_date, products.exempt
+• OpenFDA: products.openfda.device_name, products.openfda.device_class, products.openfda.regulation_number, products.openfda.medical_specialty_description
+• Contact: registration.us_agent.name, registration.us_agent.business_name, registration.owner_operator.firm_name
+See examples for usage patterns.`,
+              enum: [
+                'proprietary_name',
+                'establishment_type',
+                'pma_number',
+                'k_number',
+                'registration.registration_number',
+                'registration.fei_number',
+                'registration.status_code',
+                'registration.initial_importer_flag',
+                'registration.reg_expiry_date_year',
+                'registration.name',
+                'registration.address_line_1',
+                'registration.address_line_2',
+                'registration.city',
+                'registration.state_code',
+                'registration.iso_country_code',
+                'registration.zip_code',
+                'registration.postal_code',
+                'registration.us_agent.name',
+                'registration.us_agent.business_name',
+                'registration.us_agent.bus_phone_area_code',
+                'registration.us_agent.bus_phone_num',
+                'registration.us_agent.bus_phone_extn',
+                'registration.us_agent.fax_area_code',
+                'registration.us_agent.fax_num',
+                'registration.us_agent.email_address',
+                'registration.us_agent.address_line_1',
+                'registration.us_agent.address_line_2',
+                'registration.us_agent.city',
+                'registration.us_agent.state_code',
+                'registration.us_agent.iso_country_code',
+                'registration.us_agent.zip_code',
+                'registration.us_agent.postal_code',
+                'registration.owner_operator.firm_name',
+                'registration.owner_operator.owner_operator_number',
+                'registration.owner_operator.contact_address.address_1',
+                'registration.owner_operator.contact_address.address_2',
+                'registration.owner_operator.contact_address.city',
+                'registration.owner_operator.contact_address.state_code',
+                'registration.owner_operator.contact_address.state_province',
+                'registration.owner_operator.contact_address.iso_country_code',
+                'registration.owner_operator.contact_address.postal_code',
+                'products.product_code',
+                'products.created_date',
+                'products.owner_operator_number',
+                'products.exempt',
+                'products.openfda.k_number',
+                'products.openfda.device_name',
+                'products.openfda.medical_specialty_description',
+                'products.openfda.regulation_number',
+                'products.openfda.device_class'
+              ]
+            },
+            fields_for_device_pma: {
+              type: 'string',
+              description: `Optional field to search within device PMA (Pre-Market Approval) data. Common categories:
+• Application Info: pma_number, supplement_number, supplement_type, supplement_reason, expedited_review_flag
+• Company: applicant, street_1, street_2, city, state, zip, zip_ext
+• Device Info: generic_name, trade_name, product_code, advisory_committee, advisory_committee_description
+• Timeline: date_received, decision_date, docket_number
+• Decision: decision_code, ao_statement
+• OpenFDA: openfda.device_name, openfda.device_class, openfda.medical_specialty_description, openfda.regulation_number
+See examples for usage patterns.`,
+              enum: [
+                'pma_number',
+                'supplement_number',
+                'applicant',
+                'street_1',
+                'street_2',
+                'city',
+                'state',
+                'zip',
+                'zip_ext',
+                'generic_name',
+                'trade_name',
+                'product_code',
+                'advisory_committee',
+                'advisory_committee_description',
+                'supplement_type',
+                'supplement_reason',
+                'expedited_review_flag',
+                'date_received',
+                'decision_date',
+                'docket_number',
+                'decision_code',
+                'ao_statement',
+                'openfda.registration_number',
+                'openfda.fei_number',
+                'openfda.device_name',
+                'openfda.medical_specialty_description',
+                'openfda.regulation_number',
+                'openfda.device_class'
+              ]
+            },
+            fields_for_device_510k: {
+              type: 'string',
+              description: `Optional field to search within device 510(k) clearance data. Common categories:
+• Application Info: k_number, third_party_flag, statement_or_summary, clearance_type, expedited_review_flag
+• Company: applicant, address_1, address_2, city, state, zip_code, postal_code, country_code, contact
+• Device Info: device_name, product_code, advisory_committee, advisory_committee_description, review_advisory_committee
+• Timeline: date_received, decision_date, decision_code, decision_description
+• OpenFDA: openfda.device_name, openfda.device_class, openfda.regulation_number, openfda.medical_specialty_description
+See examples for usage patterns.`,
+              enum: [
+                'k_number',
+                'third_party_flag',
+                'statement_or_summary',
+                'clearance_type',
+                'expedited_review_flag',
+                'applicant',
+                'address_1',
+                'address_2',
+                'city',
+                'state',
+                'zip_code',
+                'postal_code',
+                'country_code',
+                'contact',
+                'device_name',
+                'product_code',
+                'advisory_committee',
+                'advisory_committee_description',
+                'review_advisory_committee',
+                'date_received',
+                'decision_date',
+                'decision_code',
+                'decision_description',
+                'openfda.registration_number',
+                'openfda.fei_number',
+                'openfda.device_name',
+                'openfda.medical_specialty_description',
+                'openfda.regulation_number',
+                'openfda.device_class'
+              ]
+            },
+            fields_for_device_udi: {
+              type: 'string',
+              description: `Optional field to search within device UDI (Unique Device Identifier) data. Common categories:
+• Device Info: device_description, brand_name, company_name, version_or_model_number, catalog_number
+• Status & Record: public_device_record_key, public_version_status, record_status, commercial_distribution_status, public_version_date
+• Device Properties: is_rx, is_otc, is_single_use, is_combination_product, is_kit, has_serial_number, has_manufacturing_date
+• Safety: mri_safety, sterilization.is_sterile, sterilization.sterilization_methods
+• Classification: product_codes.code, product_codes.name, product_codes.openfda.device_name, product_codes.openfda.device_class
+• GMDN: gmdn_terms.code, gmdn_terms.name, gmdn_terms.definition
+• Identifiers: identifiers.id, identifiers.type, identifiers.issuing_agency, labeler_duns_number
+See examples for usage patterns.`,
+              enum: [
+                'device_description',
+                'brand_name',
+                'company_name',
+                'version_or_model_number',
+                'catalog_number',
+                'public_device_record_key',
+                'public_version_status',
+                'record_status',
+                'commercial_distribution_status',
+                'public_version_date',
+                'public_version_number',
+                'publish_date',
+                'is_rx',
+                'is_otc',
+                'is_single_use',
+                'is_combination_product',
+                'is_kit',
+                'has_serial_number',
+                'has_manufacturing_date',
+                'has_lot_or_batch_number',
+                'has_expiration_date',
+                'has_donation_id_number',
+                'is_labeled_as_nrl',
+                'is_labeled_as_no_nrl',
+                'is_direct_marking_exempt',
+                'is_pm_exempt',
+                'is_hct_p',
+                'device_count_in_base_package',
+                'mri_safety',
+                'sterilization.is_sterile',
+                'sterilization.is_sterilization_prior_use',
+                'sterilization.sterilization_methods',
+                'product_codes.code',
+                'product_codes.name',
+                'product_codes.openfda.device_name',
+                'product_codes.openfda.medical_specialty_description',
+                'product_codes.openfda.regulation_number',
+                'product_codes.openfda.device_class',
+                'gmdn_terms.code',
+                'gmdn_terms.name',
+                'gmdn_terms.definition',
+                'gmdn_terms.implantable',
+                'gmdn_terms.code_status',
+                'identifiers.id',
+                'identifiers.type',
+                'identifiers.issuing_agency',
+                'labeler_duns_number',
+                'customer_contacts.phone',
+                'customer_contacts.email'
+              ]
+            },
+            fields_for_device_recalls: {
+              type: 'string',
+              description: `Optional field to search within device enforcement (recall) data. Common categories:
+• Recall Info: classification, status, voluntary_mandated, reason_for_recall, product_type
+• Company & Location: recalling_firm, city, state, country, address_1, address_2, postal_code
+• Product Details: product_description, product_quantity, code_info, more_code_info
+• Timeline: report_date, recall_initiation_date, center_classification_date
+• Distribution: distribution_pattern, initial_firm_notification
+• Tracking: recall_number, event_id
+• OpenFDA: openfda fields for additional device information
+See examples for usage patterns.`,
+              enum: [
+                'classification',
+                'status',
+                'city',
+                'state',
+                'country',
+                'product_type',
+                'event_id',
+                'recalling_firm',
+                'address_1',
+                'address_2',
+                'postal_code',
+                'voluntary_mandated',
+                'initial_firm_notification',
+                'distribution_pattern',
+                'recall_number',
+                'product_description',
+                'product_quantity',
+                'reason_for_recall',
+                'recall_initiation_date',
+                'center_classification_date',
+                'report_date',
+                'code_info',
+                'more_code_info',
+                'openfda.device_name',
+                'openfda.device_class',
+                'openfda.regulation_number',
+                'openfda.medical_specialty_description',
+                'openfda.product_code',
+                'openfda.registration_number',
+                'openfda.fei_number'
+              ]
+            },
+            fields_for_device_adverse_events: {
+              type: 'string',
+              description: `Optional field to search within device adverse event data. Common categories:
+• Report Info: date_received, report_date, event_type, report_number, type_of_report, report_source_code, adverse_event_flag
+• Device Info: device.brand_name, device.generic_name, device.model_number, device.manufacturer_d_name, device.device_report_product_code
+• Patient Info: patient.patient_age, patient.patient_sex, patient.sequence_number_outcome, patient.patient_weight, patient.patient_race
+• Event Details: event_location, mdr_text.text_type_code, mdr_text.text, remedial_action, date_of_event
+• Manufacturer: manufacturer_name, manufacturer_city, manufacturer_state, manufacturer_country
+• OpenFDA: device.openfda.device_name, device.openfda.device_class, device.openfda.regulation_number, device.openfda.medical_specialty_description
+See examples for usage patterns.`,
+              enum: [
+                'date_received',
+                'date_report',
+                'date_of_event',
+                'date_facility_aware',
+                'date_report_to_fda',
+                'event_type',
+                'report_number',
+                'type_of_report',
+                'report_source_code',
+                'adverse_event_flag',
+                'product_problem_flag',
+                'event_location',
+                'health_professional',
+                'initial_report_to_fda',
+                'report_to_fda',
+                'report_to_manufacturer',
+                'mdr_report_key',
+                'single_use_flag',
+                'previous_use_code',
+                'remedial_action',
+                'removal_correction_number',
+                'manufacturer_name',
+                'manufacturer_address_1',
+                'manufacturer_address_2',
+                'manufacturer_city',
+                'manufacturer_state',
+                'manufacturer_zip_code',
+                'manufacturer_country',
+                'manufacturer_postal_code',
+                'manufacturer_contact_f_name',
+                'manufacturer_contact_l_name',
+                'manufacturer_contact_t_name',
+                'manufacturer_contact_phone_number',
+                'manufacturer_contact_extension',
+                'manufacturer_contact_city',
+                'manufacturer_contact_state',
+                'manufacturer_contact_zip_code',
+                'manufacturer_contact_country',
+                'device.brand_name',
+                'device.generic_name',
+                'device.manufacturer_d_name',
+                'device.manufacturer_d_city',
+                'device.manufacturer_d_state',
+                'device.manufacturer_d_country',
+                'device.model_number',
+                'device.catalog_number',
+                'device.lot_number',
+                'device.device_report_product_code',
+                'device.device_operator',
+                'device.device_availability',
+                'device.implant_flag',
+                'device.device_age_text',
+                'device.device_evaluated_by_manufacturer',
+                'device.openfda.device_name',
+                'device.openfda.medical_specialty_description',
+                'device.openfda.regulation_number',
+                'device.openfda.device_class',
+                'patient.patient_age',
+                'patient.patient_sex',
+                'patient.patient_weight',
+                'patient.patient_ethnicity',
+                'patient.patient_race',
+                'patient.sequence_number_treatment',
+                'patient.sequence_number_outcome',
+                'mdr_text.text_type_code',
+                'mdr_text.text',
+                'distributor_name',
+                'distributor_address_1',
+                'distributor_city',
+                'distributor_state',
+                'distributor_zip_code'
+              ]
+            },
+            fields_for_device_classification: {
+              type: 'string',
+              description: `Optional field to search within device classification data. Common categories:
+• Basic Info: product_code, device_name, device_class, regulation_number
+• Medical Specialty: medical_specialty, medical_specialty_description, review_panel
+• Classification Details: definition, unclassified_reason, review_code, submission_type_id
+• Flags: implant_flag, life_sustain_support_flag, gmp_exempt_flag, third_party_flag
+• Reporting: summary_malfunction_reporting
+• OpenFDA: openfda.k_number, openfda.registration_number, openfda.fei_number
+See examples for usage patterns.`,
+              enum: [
+                'product_code',
+                'device_name',
+                'device_class',
+                'regulation_number',
+                'medical_specialty',
+                'medical_specialty_description',
+                'review_panel',
+                'definition',
+                'unclassified_reason',
+                'review_code',
+                'submission_type_id',
+                'implant_flag',
+                'life_sustain_support_flag',
+                'gmp_exempt_flag',
+                'third_party_flag',
+                'summary_malfunction_reporting',
+                'openfda.k_number',
+                'openfda.registration_number',
+                'openfda.fei_number'
+              ]
+            },
+            count: {
+              type: 'string',
+              description: 'Field to count/aggregate results by. Usage of .exact suffix depends on search_type:',
+              examples: [
+                // General searches - no .exact
+                'sponsor_name',
+                'application_number',
+                'openfda.product_type',
+
+                // Adverse events - .exact for text fields, not for simple fields
+                'patient.reaction.reactionmeddrapt.exact',
+                'patient.patientsex',
+                'receivedate',
+
+                // Labels - .exact for aggregation fields
+                'openfda.product_type.exact',
+                'openfda.manufacturer_name.exact'
+              ],
+              additionalProperties: {
+                'search_type guidance': {
+                  'general': 'Use field names as-is (no .exact suffix)',
+                  'adverse_events': 'Add .exact for text/categorical fields, omit for numeric/date fields',
+                  'label': 'Add .exact for text aggregation fields'
+                }
+              }
+            },
+            pharm_class: {
+              type: 'string',
+              description: 'Search by pharmacological class (drug class). This parameter automatically constructs the proper search for patient.drug.openfda.pharm_class_epc field. Useful for finding adverse events associated with specific drug classes like NSAIDs, antibiotics, antidepressants, etc. Can be combined with other search terms.',
+              examples: [
+                'nonsteroidal anti-inflammatory drug',
+                'selective serotonin reuptake inhibitor',
+                'angiotensin converting enzyme inhibitor',
+                'beta blocker',
+                'proton pump inhibitor',
+                'antihistamine',
+                'anticoagulant',
+                'diuretic',
+                'antidepressant',
+                'antibiotic',
+                'corticosteroid',
+                'benzodiazepine',
+                'opioid',
+                'statin',
+                'calcium channel blocker'
+              ]
+            },
+            field_exists: {
+              type: 'string',
+              description: 'Filter records to only those that contain a specific field, regardless of field contents. Uses FDA\'s "_exists_" search modifier. Works with both drug labels and adverse events data. For labels: find drugs with specific information like boxed warnings, contraindications, etc. For adverse events: find reports with specific data like patient demographics, drug information, reactions, etc.',
+              examples: [
+                'boxed_warning',
+                'contraindications',
+                'drug_interactions',
+                'warnings_and_cautions',
+                'adverse_reactions',
+                'indications_and_usage',
+                'dosage_and_administration',
+                'clinical_pharmacology',
+                'pregnancy',
+                'nursing_mothers',
+                'pediatric_use',
+                'geriatric_use',
+                'patient.reaction.reactionmeddrapt',
+                'patient.patientsex',
+                'patient.patientonsetage',
+                'patient.drug.medicinalproduct',
+                'patient.drug.drugindication',
+                'serious',
+                'occurcountry'
+              ]
+            },
+            limit: {
+              type: 'integer',
+              default: 10,
+              minimum: 1,
+              maximum: 100,
+              description: 'Maximum number of records to return (default: 10, max: 100). Note: openFDA supports paging through up to 26,000 total hits using skip/limit parameters.',
+              examples: [1, 5, 10, 25, 50, 100]
+            }
+          },
+          required: ['method', 'search_term'],
+          additionalProperties: false,
+          examples: [
+            {
+              description: "Basic search for aspirin across all general FDA database fields",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "aspirin",
+                "search_type": "general",
+                "limit": 10
+              }
+            },
+            {
+              description: "Find Tylenol products by searching specifically in brand name field",
+              usage: {
+                "method": "lookup_drug", 
+                "search_term": "Tylenol",
+                "search_type": "general",
+                "fields_for_general": "openfda.brand_name",
+                "limit": 5
+              }
+            },
+            {
+              description: "Search drug labels for specific warnings content",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "pregnancy",
+                "search_type": "label",
+                "fields_for_label": "warnings",
+                "limit": 10
+              }
+            },
+            {
+              description: "Find drug labels with specific indications and usage information",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "diabetes",
+                "search_type": "label",
+                "fields_for_label": "indications_and_usage"
+              }
+            },
+            {
+              description: "Search drug labels within a specific date range (Jun 2011 to Dec 2012)",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "effective_time:[20110601+TO+20121231]",
+                "search_type": "label",
+                "limit": 5
+              }
+            },
+            {
+              description: "Find all drug labels that have boxed warnings",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "*",
+                "search_type": "label",
+                "field_exists": "boxed_warning",
+                "limit": 10
+              }
+            },
+            {
+              description: "Search for specific drug interactions in labels",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "warfarin",
+                "search_type": "label",
+                "fields_for_label": "drug_interactions"
+              }
+            },
+            {
+              description: "Find dosage information for pediatric patients",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "pediatric",
+                "search_type": "label",
+                "fields_for_label": "dosage_and_administration"
+              }
+            },
+            {
+              description: "Search for contraindications containing specific conditions",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "kidney",
+                "search_type": "label",
+                "fields_for_label": "contraindications"
+              }
+            },
+            {
+              description: "Find labels with boxed warnings AND pregnancy-related contraindications",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "_exists_:boxed_warning+AND+contraindications:pregnancy",
+                "search_type": "label",
+                "limit": 5
+              }
+            },
+            {
+              description: "Search labels mentioning pregnancy OR breastfeeding in warnings sections",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "warnings:pregnancy+OR+warnings:breastfeeding+OR+warnings:\"breast+feeding\"",
+                "search_type": "label",
+                "limit": 10
+              }
+            },
+            {
+              description: "Find labels with warfarin interactions AND tablet dosage forms",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "drug_interactions:warfarin+AND+openfda.product_type:\"HUMAN+PRESCRIPTION+DRUG\"",
+                "search_type": "label"
+              }
+            },
+            {
+              description: "Search recent labels (2020+) with pediatric dosage information",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "effective_time:[20200101+TO+*]+AND+dosage_and_administration:pediatric",
+                "search_type": "label",
+                "limit": 15
+              }
+            },
+            {
+              description: "Find naproxen labels with boxed warnings using the new parameter",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "naproxen",
+                "search_type": "label",
+                "field_exists": "boxed_warning",
+                "limit": 5
+              }
+            },
+            {
+              description: "Count drug labels by product type (OTC vs Prescription)",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "*",
+                "search_type": "label",
+                "count": "openfda.product_type.exact",
+                "limit": 10
+              }
+            },
+            {
+              description: "Count boxed warning drugs by manufacturer",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "*",
+                "search_type": "label",
+                "field_exists": "boxed_warning",
+                "count": "openfda.manufacturer_name.exact",
+                "limit": 15
+              }
+            },
+            {
+              description: "Find drugs that have contraindications information",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "*",
+                "search_type": "label",
+                "field_exists": "contraindications",
+                "limit": 8
+              }
+            },
+            {
+              description: "Find drugs with drug interaction information",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "*",
+                "search_type": "label",
+                "field_exists": "drug_interactions",
+                "limit": 10
+              }
+            },
+            {
+              description: "Count drugs by whether they have pregnancy information",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "*",
+                "search_type": "label",
+                "field_exists": "pregnancy",
+                "count": "openfda.product_type.exact",
+                "limit": 5
+              }
+            },
+            {
+              description: "Find labels with hepatic impairment warnings AND renal contraindications",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "warnings:\"hepatic+impairment\"+AND+contraindications:renal",
+                "search_type": "label"
+              }
+            },
+            {
+              description: "Search for diabetes medications with cardiovascular warnings",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "indications_and_usage:diabetes+AND+(warnings:cardiovascular+OR+warnings:cardiac+OR+warnings:heart)",
+                "search_type": "label",
+                "limit": 20
+              }
+            },
+            {
+              description: "Find injectable drugs with specific storage requirements",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "openfda.route:\"INTRAVENOUS\"+AND+storage_and_handling:refrigerat*",
+                "search_type": "label"
+              }
+            },
+            {
+              description: "Search labels with geriatric use info AND drug interaction warnings",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "_exists_:geriatric_use+AND+_exists_:drug_interactions",
+                "search_type": "label",
+                "limit": 25
+              }
+            },
+            {
+              description: "Wildcard search for all brand names starting with 'child'",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "child*",
+                "search_type": "general", 
+                "fields_for_general": "openfda.brand_name"
+              }
+            },
+            {
+              description: "Search adverse events database for acetaminophen-related reports",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "acetaminophen",
+                "search_type": "adverse_events",
+                "limit": 25
+              }
+            },
+            {
+              description: "Find adverse events where patients experienced headaches",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "headache",
+                "search_type": "adverse_events",
+                "fields_for_adverse_events": "patient.reaction.reactionmeddrapt"
+              }
+            },
+            {
+              description: "Search for serious adverse events (hospitalization, death, etc.)",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "serious:1",
+                "search_type": "adverse_events",
+                "fields_for_adverse_events": "serious",
+                "limit": 50
+              }
+            },
+            {
+              description: "Find drugs indicated for multiple myeloma using exact phrase search",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "\"multiple+myeloma\"",
+                "search_type": "adverse_events",
+                "fields_for_adverse_events": "patient.drug.drugindication"
+              }
+            },
+            {
+              description: "Search for adverse events involving antihistamines (multiple drug names)",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "cetirizine+OR+loratadine+OR+diphenhydramine",
+                "search_type": "adverse_events",
+                "fields_for_adverse_events": "patient.drug.medicinalproduct"
+              }
+            },
+            {
+              description: "Find public-submitted adverse event reports (no company number)",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "_missing_:companynumb",
+                "search_type": "adverse_events"
+              }
+            },
+            {
+              description: "Find adverse event reports that have patient reaction data",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "*",
+                "search_type": "adverse_events",
+                "field_exists": "patient.reaction.reactionmeddrapt",
+                "limit": 10
+              }
+            },
+            {
+              description: "Find adverse events that have patient sex information",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "*",
+                "search_type": "adverse_events",
+                "field_exists": "patient.patientsex",
+                "limit": 20
+              }
+            },
+            {
+              description: "Find adverse events for aspirin that have patient age data",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "aspirin",
+                "search_type": "adverse_events",
+                "field_exists": "patient.patientonsetage",
+                "limit": 15
+              }
+            },
+            {
+              description: "Find adverse events that have drug indication information",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "*",
+                "search_type": "adverse_events",
+                "field_exists": "patient.drug.drugindication",
+                "limit": 25
+              }
+            },
+            {
+              description: "Search for tablet dosage form products only",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "TABLET",
+                "search_type": "general",
+                "fields_for_general": "products.dosage_form"
+              }
+            },
+            {
+              description: "Find aspirin products that are tablets (basic AND query)",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "openfda.generic_name:aspirin+AND+products.dosage_form:TABLET",
+                "search_type": "general",
+                "limit": 5
+              }
+            },
+            {
+              description: "Find Tylenol products that are specifically tablets (multi-field search)",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "openfda.brand_name:tylenol+AND+products.dosage_form:tablet",
+                "search_type": "general",
+                "limit": 20
+              }
+            },
+            {
+              description: "Search for oral medications made by Pfizer",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "openfda.manufacturer_name:pfizer+AND+openfda.route:oral",
+                "search_type": "general"
+              }
+            },
+            {
+              description: "Find products with ibuprofen generic name OR Advil brand name",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "openfda.generic_name:ibuprofen+OR+openfda.brand_name:advil",
+                "search_type": "general",
+                "limit": 15
+              }
+            },
+            {
+              description: "Find aspirin adverse events in male patients only",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "patient.drug.medicinalproduct:aspirin+AND+patient.patientsex:1",
+                "search_type": "adverse_events",
+                "limit": 30
+              }
+            },
+            {
+              description: "Search serious acetaminophen adverse events in elderly patients (65+)",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "patient.drug.medicinalproduct:acetaminophen+AND+serious:1+AND+patient.patientonsetage:[65+TO+*]",
+                "search_type": "adverse_events",
+                "limit": 40
+              }
+            },
+            {
+              description: "Find headache reactions in patients taking pain medications",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "patient.reaction.reactionmeddrapt:headache+AND+patient.drug.drugindication:pain",
+                "search_type": "adverse_events"
+              }
+            },
+            {
+              description: "Search serious Lipitor adverse events reported in the United States",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "occurcountry:US+AND+patient.drug.medicinalproduct:lipitor+AND+serious:1",
+                "search_type": "adverse_events",
+                "limit": 25
+              }
+            },
+            {
+              description: "Find non-serious adverse events for any of three antihistamines (grouped OR query)",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "(patient.drug.medicinalproduct:(cetirizine+OR+loratadine+OR+diphenhydramine))+AND+serious:2",
+                "search_type": "adverse_events"
+              }
+            },
+            {
+              description: "Search 2023 adverse event reports for female patients",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "receiptdate:[2023-01-01+TO+2023-12-31]+AND+patient.patientsex:2",
+                "search_type": "adverse_events",
+                "limit": 50
+              }
+            },
+            {
+              description: "Count adverse reactions for riluzole (population-level statistics)",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "patient.drug.medicinalproduct:riluzole",
+                "search_type": "adverse_events",
+                "count": "patient.reaction.reactionmeddrapt.exact",
+                "limit": 10
+              }
+            },
+            {
+              description: "Count serious vs non-serious adverse events across all drugs",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "*",
+                "search_type": "adverse_events",
+                "count": "serious",
+                "limit": 5
+              }
+            },
+            {
+              description: "Count adverse events by gender distribution",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "patient.drug.openfda.pharm_class_epc:\"nonsteroidal+anti-inflammatory+drug\"",
+                "search_type": "adverse_events",
+                "count": "patient.patientsex",
+                "limit": 5
+              }
+            },
+            {
+              description: "Count temporal patterns of adverse event reports by year",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "patient.drug.medicinalproduct:aspirin",
+                "search_type": "adverse_events",
+                "count": "receivedate",
+                "limit": 10
+              }
+            },
+            {
+              description: "Count adverse events by pharmacological class",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "*",
+                "search_type": "adverse_events",
+                "count": "patient.drug.openfda.pharm_class_epc",
+                "limit": 15
+              }
+            },
+            {
+              description: "Count adverse events by country of occurrence",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "serious:1",
+                "search_type": "adverse_events",
+                "count": "occurcountry",
+                "limit": 10
+              }
+            },
+            {
+              description: "Find all NSAID adverse events using pharmacological class",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "*",
+                "search_type": "adverse_events",
+                "pharm_class": "nonsteroidal anti-inflammatory drug",
+                "limit": 20
+              }
+            },
+            {
+              description: "Find aspirin adverse events within NSAID class",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "aspirin",
+                "search_type": "adverse_events",
+                "pharm_class": "nonsteroidal anti-inflammatory drug",
+                "limit": 15
+              }
+            },
+            {
+              description: "Find SSRI antidepressant adverse events",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "*",
+                "search_type": "adverse_events",
+                "pharm_class": "selective serotonin reuptake inhibitor",
+                "limit": 25
+              }
+            },
+            {
+              description: "Count serious adverse events by opioid pharmacological class",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "serious:1",
+                "search_type": "adverse_events",
+                "pharm_class": "opioid",
+                "count": "patient.reaction.reactionmeddrapt.exact",
+                "limit": 10
+              }
+            },
+            {
+              description: "Find beta blocker adverse events affecting cardiovascular system",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "patient.reaction.reactionmeddrapt:cardiovascular",
+                "search_type": "adverse_events",
+                "pharm_class": "beta blocker",
+                "limit": 15
+              }
+            },
+            {
+              description: "Find discontinued drug products",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "Discontinued",
+                "search_type": "general",
+                "fields_for_general": "products.marketing_status"
+              }
+            },
+            {
+              description: "Wildcard search for brand names containing 'MEF' pattern",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "MEF*",
+                "search_type": "general",
+                "fields_for_general": "openfda.brand_name"
+              }
+            },
+            {
+              description: "Wildcard search for products with '5' in any field (strength, NDC, etc.)",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "*5*",
+                "search_type": "general"
+              }
+            },
+            {
+              description: "Search by FDA application number (specific drug application)",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "NDA011459",
+                "search_type": "general",
+                "fields_for_general": "application_number"
+              }
+            },
+            {
+              description: "Find all drugs by a specific sponsor/company",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "PFIZER",
+                "search_type": "general",
+                "fields_for_general": "sponsor_name"
+              }
+            },
+            {
+              description: "Search for drugs by brand name (products level)",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "VISTARIL",
+                "search_type": "general",
+                "fields_for_general": "products.brand_name"
+              }
+            },
+            {
+              description: "Complex query: Find PFIZER capsules and tablets",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "(products.dosage_form:\"TABLET\"+OR+products.dosage_form:\"CAPSULE\")+AND+sponsor_name:\"PFIZER\"",
+                "search_type": "general",
+                "limit": 5
+              }
+            },
+            {
+              description: "Find adverse event reports that have seriousness information recorded",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "_exists_:serious",
+                "search_type": "adverse_events"
+              }
+            },
+            {
+              description: "Find prescription acetaminophen products (multi-field combination)",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "products.active_ingredients.name:acetaminophen+AND+products.marketing_status:prescription",
+                "search_type": "general",
+                "limit": 25
+              }
+            },
+            {
+              description: "Search drug recalls by recalling firm",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "Pfizer",
+                "search_type": "recalls",
+                "fields_for_recalls": "recalling_firm",
+                "limit": 10
+              }
+            },
+            {
+              description: "Find Class I recalls (most serious health hazard)",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "I",
+                "search_type": "recalls",
+                "fields_for_recalls": "classification",
+                "limit": 15
+              }
+            },
+            {
+              description: "Search recalls by product description",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "tablet",
+                "search_type": "recalls",
+                "fields_for_recalls": "product_description"
+              }
+            },
+            {
+              description: "Find voluntary vs mandated recalls",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "Voluntary",
+                "search_type": "recalls",
+                "fields_for_recalls": "voluntary_mandated"
+              }
+            },
+            {
+              description: "Search drug shortages by generic name",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "pravastatin",
+                "search_type": "shortages",
+                "fields_for_shortages": "generic_name"
+              }
+            },
+            {
+              description: "Find current drug shortages by status",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "Currently+in+Shortage",
+                "search_type": "shortages",
+                "fields_for_shortages": "status",
+                "limit": 20
+              }
+            },
+            {
+              description: "Search shortages by therapeutic category",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "CEPHALOSPORIN",
+                "search_type": "shortages",
+                "fields_for_shortages": "therapeutic_category"
+              }
+            },
+            {
+              description: "Find shortages by company name",
+              usage: {
+                "method": "lookup_drug",
+                "search_term": "Pfizer",
+                "search_type": "shortages",
+                "fields_for_shortages": "company_name"
+              }
+            },
+            {
+              description: "Search device registrations by product code",
+              usage: {
+                "method": "lookup_device",
+                "search_term": "HQY",
+                "search_type": "device_registration",
+                "fields_for_device_registration": "products.product_code",
+                "limit": 1
+              }
+            },
+            {
+              description: "Find devices by regulation number",
+              usage: {
+                "method": "lookup_device",
+                "search_term": "886.5850",
+                "search_type": "device_registration",
+                "fields_for_device_registration": "products.openfda.regulation_number",
+                "limit": 1
+              }
+            },
+            {
+              description: "Search device registrations by device class",
+              usage: {
+                "method": "lookup_device",
+                "search_term": "Class II",
+                "search_type": "device_registration",
+                "fields_for_device_registration": "products.openfda.device_class"
+              }
+            },
+            {
+              description: "Find device registrations by company name",
+              usage: {
+                "method": "lookup_device",
+                "search_term": "Abbott",
+                "search_type": "device_registration",
+                "fields_for_device_registration": "registration.name"
+              }
+            },
+            {
+              description: "Search approved PMA submissions by decision code",
+              usage: {
+                "method": "lookup_device",
+                "search_term": "APPR",
+                "search_type": "device_pma",
+                "fields_for_device_pma": "decision_code",
+                "limit": 1
+              }
+            },
+            {
+              description: "Find PMA records by product code",
+              usage: {
+                "method": "lookup_device",
+                "search_term": "LWP",
+                "search_type": "device_pma",
+                "fields_for_device_pma": "product_code",
+                "limit": 1
+              }
+            },
+            {
+              description: "Search PMA submissions by advisory committee",
+              usage: {
+                "method": "lookup_device",
+                "search_term": "EN",
+                "search_type": "device_pma",
+                "fields_for_device_pma": "advisory_committee"
+              }
+            },
+            {
+              description: "Find PMA submissions by applicant company",
+              usage: {
+                "method": "lookup_device",
+                "search_term": "Medtronic",
+                "search_type": "device_pma",
+                "fields_for_device_pma": "applicant"
+              }
+            },
+            {
+              description: "Search 510(k) clearances by cardiovascular advisory committee",
+              usage: {
+                "method": "lookup_device",
+                "search_term": "cv",
+                "search_type": "device_510k",
+                "fields_for_device_510k": "advisory_committee",
+                "limit": 1
+              }
+            },
+            {
+              description: "Find 510(k) clearances by regulation number",
+              usage: {
+                "method": "lookup_device",
+                "search_term": "868.5895",
+                "search_type": "device_510k",
+                "fields_for_device_510k": "openfda.regulation_number",
+                "limit": 1
+              }
+            },
+            {
+              description: "Search 510(k) clearances by device class",
+              usage: {
+                "method": "lookup_device",
+                "search_term": "Class II",
+                "search_type": "device_510k",
+                "fields_for_device_510k": "openfda.device_class"
+              }
+            },
+            {
+              description: "Find 510(k) clearances by applicant company",
+              usage: {
+                "method": "lookup_device",
+                "search_term": "Boston Scientific",
+                "search_type": "device_510k",
+                "fields_for_device_510k": "applicant"
+              }
+            },
+            {
+              description: "Search UDI database for records with public device record key",
+              usage: {
+                "method": "lookup_device",
+                "search_term": "_exists_:public_device_record_key",
+                "search_type": "device_udi",
+                "limit": 1
+              }
+            },
+            {
+              description: "Find UDI records with update status",
+              usage: {
+                "method": "lookup_device",
+                "search_term": "Update",
+                "search_type": "device_udi",
+                "fields_for_device_udi": "public_version_status",
+                "limit": 1
+              }
+            },
+            {
+              description: "Search UDI records by device class",
+              usage: {
+                "method": "lookup_device",
+                "search_term": "Class II",
+                "search_type": "device_udi",
+                "fields_for_device_udi": "product_codes.openfda.device_class"
+              }
+            },
+            {
+              description: "Find UDI records by company name",
+              usage: {
+                "method": "lookup_device",
+                "search_term": "Medtronic",
+                "search_type": "device_udi",
+                "fields_for_device_udi": "company_name"
+              }
+            },
+            {
+              description: "Search device recalls by classification",
+              usage: {
+                "method": "lookup_device",
+                "search_term": "Class II",
+                "search_type": "device_recalls",
+                "fields_for_device_recalls": "classification",
+                "limit": 5
+              }
+            },
+            {
+              description: "Find Class I device recalls (most serious)",
+              usage: {
+                "method": "lookup_device",
+                "search_term": "Class I",
+                "search_type": "device_recalls",
+                "fields_for_device_recalls": "classification",
+                "limit": 10
+              }
+            },
+            {
+              description: "Search device recalls by recalling firm",
+              usage: {
+                "method": "lookup_device",
+                "search_term": "Medtronic",
+                "search_type": "device_recalls",
+                "fields_for_device_recalls": "recalling_firm"
+              }
+            },
+            {
+              description: "Find voluntary vs mandated device recalls",
+              usage: {
+                "method": "lookup_device",
+                "search_term": "Voluntary",
+                "search_type": "device_recalls",
+                "fields_for_device_recalls": "voluntary_mandated"
+              }
+            },
+            {
+              description: "Search device adverse events for cardiac devices",
+              usage: {
+                "method": "lookup_device",
+                "search_term": "cardiac",
+                "search_type": "device_adverse_events",
+                "limit": 2
+              }
+            },
+            {
+              description: "Find device adverse events involving x-ray devices",
+              usage: {
+                "method": "lookup_device",
+                "search_term": "x-ray",
+                "search_type": "device_adverse_events",
+                "fields_for_device_adverse_events": "device.generic_name",
+                "limit": 1
+              }
+            },
+            {
+              description: "Search device adverse events by event type",
+              usage: {
+                "method": "lookup_device",
+                "search_term": "Injury",
+                "search_type": "device_adverse_events",
+                "fields_for_device_adverse_events": "event_type"
+              }
+            },
+            {
+              description: "Find device adverse events by manufacturer",
+              usage: {
+                "method": "lookup_device",
+                "search_term": "Medtronic",
+                "search_type": "device_adverse_events",
+                "fields_for_device_adverse_events": "manufacturer_name"
+              }
+            },
+            {
+              description: "Search device classification by regulation number",
+              usage: {
+                "method": "lookup_device",
+                "search_term": "872.6855",
+                "search_type": "device_classification",
+                "fields_for_device_classification": "regulation_number",
+                "limit": 1
+              }
+            },
+            {
+              description: "Find device classification by product code",
+              usage: {
+                "method": "lookup_device",
+                "search_term": "NOB",
+                "search_type": "device_classification",
+                "fields_for_device_classification": "product_code",
+                "limit": 1
+              }
+            },
+            {
+              description: "Search device classifications by device class",
+              usage: {
+                "method": "lookup_device",
+                "search_term": "Class II",
+                "search_type": "device_classification",
+                "fields_for_device_classification": "device_class"
+              }
+            },
+            {
+              description: "Find device classifications by medical specialty",
+              usage: {
+                "method": "lookup_device",
+                "search_term": "Radiology",
+                "search_type": "device_classification",
+                "fields_for_device_classification": "medical_specialty_description"
+              }
+            }
+          ]
+        }
+      }
+    ]
+  };
+});
+
+// Handle tool calls
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  const { name, arguments: args } = request.params;
+
+  if (name !== 'fda_info') {
+    throw new Error(`Unknown tool: ${name}`);
+  }
+
+  try {
+    const { method, search_term, search_type = 'general', fields_for_general, fields_for_adverse_events, fields_for_label, fields_for_recalls, fields_for_shortages, fields_for_device_registration, fields_for_device_pma, fields_for_device_510k, fields_for_device_udi, fields_for_device_recalls, fields_for_device_adverse_events, fields_for_device_classification, count, pharm_class, field_exists, limit = 10 } = args;
+
+    if (!search_term) {
+      throw new Error('search_term parameter is required');
+    }
+
+    switch (method) {
+      case 'lookup_drug': {
+        // Determine which field parameter to use based on search_type
+        let field = null;
+        if (search_type === 'adverse_events' && fields_for_adverse_events) {
+          field = fields_for_adverse_events;
+        } else if (search_type === 'label' && fields_for_label) {
+          field = fields_for_label;
+        } else if (search_type === 'recalls' && fields_for_recalls) {
+          field = fields_for_recalls;
+        } else if (search_type === 'shortages' && fields_for_shortages) {
+          field = fields_for_shortages;
+        } else if (search_type === 'general' && fields_for_general) {
+          field = fields_for_general;
+        }
+
+        const results = await lookupDrug(search_term, search_type, limit, field, count, pharm_class, field_exists);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(results, null, 2)
+            }
+          ]
+        };
+      }
+
+      case 'lookup_device': {
+        // Determine which field parameter to use based on search_type
+        let field = null;
+        if (search_type === 'device_registration' && fields_for_device_registration) {
+          field = fields_for_device_registration;
+        } else if (search_type === 'device_pma' && fields_for_device_pma) {
+          field = fields_for_device_pma;
+        } else if (search_type === 'device_510k' && fields_for_device_510k) {
+          field = fields_for_device_510k;
+        } else if (search_type === 'device_udi' && fields_for_device_udi) {
+          field = fields_for_device_udi;
+        } else if (search_type === 'device_recalls' && fields_for_device_recalls) {
+          field = fields_for_device_recalls;
+        } else if (search_type === 'device_adverse_events' && fields_for_device_adverse_events) {
+          field = fields_for_device_adverse_events;
+        } else if (search_type === 'device_classification' && fields_for_device_classification) {
+          field = fields_for_device_classification;
+        }
+
+        const results = await lookupDevice(search_term, search_type, limit, field);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(results, null, 2)
+            }
+          ]
+        };
+      }
+
+      default:
+        throw new Error(`Unknown method: ${method}`);
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({ 
+            error: errorMessage,
+            success: false 
+          }, null, 2)
+        }
+      ]
+    };
+  }
+});
+
+// Register prompts using modern MCP SDK pattern
+server.registerPrompt(
+  'drug_safety_analysis',
+  {
+    title: 'Drug Safety Analysis',
+    description: 'Comprehensive drug safety analysis using FDA adverse events data (FAERS database). Analyzes safety profile with total reports, top reactions, serious events by demographics, and age patterns for deaths.',
+    argsSchema: {
+      drug_name: {
+        type: 'string',
+        description: 'Name of the drug to analyze (generic or brand name)',
+        required: true
+      }
+    }
+  },
+  ({ drug_name }) => {
+    const prompt = `Analyze the safety profile for ${drug_name} using FDA adverse events data with these optimized queries:
+      {
+        name: 'drug_safety_analysis',
+        description: 'Comprehensive drug safety analysis using FDA adverse events data (FAERS database). Analyzes safety profile with total reports, top reactions, serious events by demographics, and age patterns for deaths.',
+        arguments: [
+          {
+            name: 'drug_name',
+            description: 'Name of the drug to analyze (generic or brand name)',
+            required: true
+          }
+        ]
+      },
+      {
+        name: 'pharmaceutical_competitive_intelligence',
+        description: 'Comprehensive pharmaceutical competitive intelligence analysis for company positioning, market share, portfolio strength, and strategic assessment using FDA regulatory data.',
+        arguments: [
+          {
+            name: 'company_name',
+            description: 'Name of the pharmaceutical company to analyze (sponsor name in FDA database)',
+            required: true
+          }
+        ]
+      },
+      {
+        name: 'generic_competition_assessment',
+        description: 'Comprehensive generic competition assessment for Orange Book FDA analysis. Evaluates market entry patterns, competitive landscape, reference vs generic drug distinction, and market maturity indicators.',
+        arguments: [
+          {
+            name: 'brand_drug',
+            description: 'Brand name of the drug to analyze for generic competition (provide either brand_drug or generic_name)',
+            required: false
+          },
+          {
+            name: 'generic_name',
+            description: 'Generic name of the drug to analyze for generic competition (provide either brand_drug or generic_name)',
+            required: false
+          }
+        ]
+      },
+      {
+        name: 'supply_chain_intelligence',
+        description: 'Comprehensive supply chain risk assessment for drug manufacturing and availability. Analyzes current shortages, therapeutic vulnerability patterns, supplier concentration risks, and manufacturing resilience.',
+        arguments: [
+          {
+            name: 'drug_name',
+            description: 'Specific drug name (generic) to analyze for supply chain risks (provide either drug_name or therapeutic_area)',
+            required: false
+          },
+          {
+            name: 'therapeutic_area',
+            description: 'Therapeutic area to analyze (e.g., "Oncology", "Cardiovascular", "Pediatric") (provide either drug_name or therapeutic_area)',
+            required: false
+          }
+        ]
+      },
+      {
+        name: 'fda_regulatory_intelligence',
+        description: 'Comprehensive FDA regulatory intelligence analysis combining approval timeline, safety surveillance, recent regulatory activity, and supply chain status for drugs or companies.',
+        arguments: [
+          {
+            name: 'drug_name',
+            description: 'Drug name (brand or generic) to analyze for regulatory intelligence (provide either drug_name or company_name)',
+            required: false
+          },
+          {
+            name: 'company_name',
+            description: 'Pharmaceutical company name to analyze for regulatory intelligence (provide either drug_name or company_name)',
+            required: false
+          }
+        ]
+      },
+      {
+        name: 'weekly_regulatory_monitoring',
+        description: 'Automated weekly pharmaceutical regulatory intelligence report with surveillance queries for monitoring regulatory activity, safety signals, and supply chain intelligence.',
+        arguments: [
+          {
+            name: 'target_entity',
+            description: 'Company name, drug name, or therapeutic area to monitor (e.g., "Pfizer", "metformin", "Oncology")',
+            required: true
+          },
+          {
+            name: 'current_date',
+            description: 'Current date in YYYY-MM-DD format for date range calculations (e.g., "2024-09-17")',
+            required: true
+          }
+        ]
+      },
+      {
+        name: 'fda_market_intelligence',
+        description: 'FDA-focused market intelligence analysis including patent protection timelines, generic competition risks, and regulatory pathway impacts on market access for investment decision-making.',
+        arguments: [
+          {
+            name: 'drug_name',
+            description: 'Drug name (brand or generic) for market intelligence analysis (provide either drug_name or company_name)',
+            required: false
+          },
+          {
+            name: 'company_name',
+            description: 'Pharmaceutical company name for market intelligence analysis (provide either drug_name or company_name)',
+            required: false
+          }
+        ]
+      }
+    ]
+  };
+});
+
+// Handle prompt requests
+server.setRequestHandler(GetPromptRequestSchema, async (request) => {
+  const { name, arguments: args } = request.params;
+
+  if (name === 'drug_safety_analysis') {
+
+  const drugName = args?.drug_name;
+  if (!drugName) {
+    throw new Error('drug_name argument is required');
+  }
+
+  const prompt = `Analyze the safety profile for ${drugName} using FDA adverse events data with these optimized queries:
+
+1. Total reports with reaction data:
+   - Tool: fda_info
+   - Parameters: {
+       "method": "lookup_drug",
+       "search_term": "patient.drug.medicinalproduct:\\"${drugName}\\"",
+       "search_type": "adverse_events",
+       "field_exists": "patient.reaction.reactionmeddrapt",
+       "limit": 1
+     }
+
+2. Top adverse reactions (count statistics):
+   - Tool: fda_info
+   - Parameters: {
+       "method": "lookup_drug",
+       "search_term": "patient.drug.medicinalproduct:\\"${drugName}\\"",
+       "search_type": "adverse_events",
+       "count": "patient.reaction.reactionmeddrapt.exact",
+       "limit": 10
+     }
+
+3. Serious events by gender demographics:
+   - Tool: fda_info
+   - Parameters: {
+       "method": "lookup_drug",
+       "search_term": "patient.drug.medicinalproduct:\\"${drugName}\\"+AND+serious:1",
+       "search_type": "adverse_events",
+       "count": "patient.patientsex",
+       "limit": 5
+     }
+
+4. Death events by age patterns:
+   - Tool: fda_info
+   - Parameters: {
+       "method": "lookup_drug",
+       "search_term": "patient.drug.medicinalproduct:\\"${drugName}\\"+AND+seriousnessdeath:1",
+       "search_type": "adverse_events",
+       "count": "patient.patientonsetage",
+       "limit": 8
+     }
+
+**Analysis Guidelines:**
+- Sex codes: 1=male, 2=female, 0=unknown
+- Focus on count statistics for population-level insights, not individual cases
+- Look for patterns in age demographics and serious event rates
+- Consider reaction frequency and severity
+
+**Output Format:**
+1. **Safety Overview** (2 bullets): Total reports summary and data completeness
+2. **Top Reactions Table**: Most frequent adverse events with counts
+3. **Demographics Summary**: Gender distribution and age patterns for serious events
+4. **Risk Assessment** (1 paragraph): Key safety signals and clinical implications
+
+Execute these queries in sequence and provide a comprehensive safety analysis based on the FDA adverse events data.`;
+
+    return {
+      description: `Drug safety analysis for ${drugName} using FDA FAERS database`,
+      messages: [
+        {
+          role: 'user',
+          content: {
+            type: 'text',
+            text: prompt
+          }
+        }
+      ]
+    };
+  } else if (name === 'pharmaceutical_competitive_intelligence') {
+    const companyName = args?.company_name;
+    if (!companyName) {
+      throw new Error('company_name argument is required');
+    }
+
+    const prompt = `Analyze ${companyName}'s competitive position in the pharmaceutical market using FDA regulatory data with these strategic queries:
+
+1. Rank top pharmaceutical companies by prescription drug applications:
+   - Tool: fda_info
+   - Parameters: {
+       "method": "lookup_drug",
+       "search_term": "products.marketing_status:Prescription",
+       "search_type": "general",
+       "count": "sponsor_name",
+       "limit": 10
+     }
+
+2. Company's position among pharmaceutical competitors with active prescription products:
+   - Tool: fda_info
+   - Parameters: {
+       "method": "lookup_drug",
+       "search_term": "sponsor_name:\\"${companyName}\\" AND products.marketing_status:Prescription",
+       "search_type": "general",
+       "count": "application_number",
+       "limit": 15
+     }
+
+3. Company's top active prescription brands and generic names:
+   - Tool: fda_info
+   - Parameters: {
+       "method": "lookup_drug",
+       "search_term": "sponsor_name:\\"${companyName}\\" AND products.marketing_status:Prescription",
+       "search_type": "general",
+       "fields_for_general": "openfda.brand_name",
+       "limit": 15
+     }
+
+4. Company's formulation specializations and delivery methods:
+   - Tool: fda_info
+   - Parameters: {
+       "method": "lookup_drug",
+       "search_term": "sponsor_name:\\"${companyName}\\" AND products.marketing_status:Prescription",
+       "search_type": "general",
+       "fields_for_general": "products.dosage_form",
+       "limit": 10
+     }
+
+5. Company's latest regulatory submissions and pipeline products:
+   - Tool: fda_info
+   - Parameters: {
+       "method": "lookup_drug",
+       "search_term": "sponsor_name:\\"${companyName}\\"",
+       "search_type": "general",
+       "fields_for_general": "application_number",
+       "limit": 10
+     }
+
+**Analysis Framework:**
+- **Market Position**: Rank vs top 8 sponsors by application volume
+- **Portfolio Strength**: Active prescription drugs vs discontinued products
+- **Regulatory Momentum**: Recent approvals/submissions in past 2 years
+- **Competitive Focus**: Dosage form specialization and therapeutic class concentration
+
+**Output Format:**
+1. **Market Position** (3 bullets): Ranking, relative size, competitive tier
+2. **Portfolio Summary** (table): Top 5-7 products with status and approval dates
+3. **Strategic Assessment** (1 paragraph): Regulatory activity, dosage focus, competitive advantages
+
+Execute these queries in sequence and provide a comprehensive competitive intelligence analysis based on the FDA regulatory data.`;
+
+    return {
+      description: `Pharmaceutical competitive intelligence analysis for ${companyName} using FDA regulatory data`,
+      messages: [
+        {
+          role: 'user',
+          content: {
+            type: 'text',
+            text: prompt
+          }
+        }
+      ]
+    };
+  } else if (name === 'generic_competition_assessment') {
+    const brandDrug = args?.brand_drug;
+    const genericName = args?.generic_name;
+    if (!brandDrug && !genericName) {
+      throw new Error('Either brand_drug or generic_name argument is required');
+    }
+
+    const drugIdentifier = brandDrug || genericName;
+    const providedType = brandDrug ? 'brand' : 'generic';
+
+    const prompt = `Assess generic competition for ${drugIdentifier} using Orange Book FDA analysis with these targeted queries:
+
+1. Confirm drug details and derive missing information:
+   - Tool: fda_info
+   - Parameters: {
+       "method": "lookup_drug",
+       "search_term": "${brandDrug ? `products.brand_name:\\"${brandDrug}\\"` : `openfda.generic_name:\\"${genericName}\\"`}",
+       "search_type": "general",
+       "fields_for_general": "openfda.brand_name,openfda.generic_name,sponsor_name,application_number",
+       "limit": 1
+     }
+
+Note: From the result above, use the derived generic name for subsequent queries (queries 2-5 should use the generic name found in openfda.generic_name field).
+
+2. Total competitive landscape including originator + generics:
+   - Tool: fda_info
+   - Parameters: {
+       "method": "lookup_drug",
+       "search_term": "openfda.generic_name:[DERIVED_GENERIC_NAME] AND products.marketing_status:Prescription",
+       "search_type": "general",
+       "count": "sponsor_name",
+       "limit": 8
+     }
+
+3. Reference vs generic drug distinction:
+   - Tool: fda_info
+   - Parameters: {
+       "method": "lookup_drug",
+       "search_term": "openfda.generic_name:[DERIVED_GENERIC_NAME] AND products.marketing_status:Prescription",
+       "search_type": "general",
+       "fields_for_general": "sponsor_name,products.reference_drug",
+       "limit": 5
+     }
+
+4. Latest generic entries (non-reference drugs):
+   - Tool: fda_info
+   - Parameters: {
+       "method": "lookup_drug",
+       "search_term": "openfda.generic_name:[DERIVED_GENERIC_NAME] AND products.reference_drug:No",
+       "search_type": "general",
+       "fields_for_general": "sponsor_name,application_number",
+       "limit": 3
+     }
+
+5. Market timeline and chronological approvals:
+   - Tool: fda_info
+   - Parameters: {
+       "method": "lookup_drug",
+       "search_term": "openfda.generic_name:[DERIVED_GENERIC_NAME] AND products.marketing_status:Prescription",
+       "search_type": "general",
+       "fields_for_general": "sponsor_name,products.reference_drug",
+       "limit": 3
+     }
+
+**Analysis Framework:**
+- **Market Maturity**: Reference drug vs generic manufacturer count
+- **Competitive Intensity**: Number of approved biosimilars/generics
+- **Entry Momentum**: Recent approval timeline and sponsor diversity
+- **Market Accessibility**: Patent cliff indicators and exclusivity status
+
+**Output Format:**
+1. **Competition Status** (3 bullets): Total manufacturers, originator vs generics, market maturity
+2. **Competitive Timeline** (table): Chronological approvals with sponsor and application numbers
+3. **Market Assessment** (1 paragraph): Competition intensity, recent entries, strategic implications
+
+Execute these queries in sequence and provide a comprehensive generic competition assessment based on the Orange Book FDA analysis.`;
+
+    return {
+      description: `Generic competition assessment for ${drugIdentifier} (${providedType} name provided) using Orange Book FDA analysis`,
+      messages: [
+        {
+          role: 'user',
+          content: {
+            type: 'text',
+            text: prompt
+          }
+        }
+      ]
+    };
+  } else if (name === 'supply_chain_intelligence') {
+    const drugName = args?.drug_name;
+    const therapeuticArea = args?.therapeutic_area;
+    if (!drugName && !therapeuticArea) {
+      throw new Error('Either drug_name or therapeutic_area argument is required');
+    }
+
+    const analysisTarget = drugName || therapeuticArea;
+    const providedType = drugName ? 'drug' : 'therapeutic_area';
+
+    let prompt;
+    if (therapeuticArea) {
+      prompt = `Analyze supply chain risks for ${therapeuticArea} therapeutic area with these optimized queries:
+
+1. Active shortages in ${therapeuticArea} therapeutic area:
+   - Tool: fda_info
+   - Parameters: {
+       "method": "lookup_drug",
+       "search_term": "therapeutic_category:\\"${therapeuticArea}\\"",
+       "search_type": "shortages",
+       "fields_for_shortages": "generic_name,company_name,status,shortage_reason",
+       "limit": 5
+     }
+
+2. Shortage patterns by therapeutic category:
+   - Tool: fda_info
+   - Parameters: {
+       "method": "lookup_drug",
+       "search_term": "status:Current",
+       "search_type": "shortages",
+       "count": "therapeutic_category",
+       "limit": 8
+     }
+
+3. Companies affected in ${therapeuticArea} area:
+   - Tool: fda_info
+   - Parameters: {
+       "method": "lookup_drug",
+       "search_term": "therapeutic_category:\\"${therapeuticArea}\\" AND status:Current",
+       "search_type": "shortages",
+       "fields_for_shortages": "company_name",
+       "limit": 5
+     }
+
+4. Shortage reasons in ${therapeuticArea} category:
+   - Tool: fda_info
+   - Parameters: {
+       "method": "lookup_drug",
+       "search_term": "therapeutic_category:\\"${therapeuticArea}\\"",
+       "search_type": "shortages",
+       "fields_for_shortages": "shortage_reason",
+       "limit": 5
+     }
+
+5. Upcoming supply exits (discontinuation risk):
+   - Tool: fda_info
+   - Parameters: {
+       "method": "lookup_drug",
+       "search_term": "status:\\"To Be Discontinued\\"",
+       "search_type": "shortages",
+       "fields_for_shortages": "generic_name,company_name,discontinued_date",
+       "limit": 3
+     }`;
+    } else {
+      prompt = `Analyze supply chain risks for ${drugName} drug with these optimized queries:
+
+1. Derive therapeutic area and current shortage status for ${drugName}:
+   - Tool: fda_info
+   - Parameters: {
+       "method": "lookup_drug",
+       "search_term": "generic_name:\\"${drugName}\\"",
+       "search_type": "shortages",
+       "fields_for_shortages": "therapeutic_category,status,shortage_reason,company_name",
+       "limit": 5
+     }
+
+Note: From the result above, use the derived therapeutic_category for subsequent therapeutic area analysis.
+
+2. Market concentration risk for ${drugName}:
+   - Tool: fda_info
+   - Parameters: {
+       "method": "lookup_drug",
+       "search_term": "openfda.generic_name:\\"${drugName}\\" AND products.marketing_status:Prescription",
+       "search_type": "general",
+       "count": "sponsor_name",
+       "limit": 5
+     }
+
+3. Manufacturing diversity for ${drugName} formulations:
+   - Tool: fda_info
+   - Parameters: {
+       "method": "lookup_drug",
+       "search_term": "openfda.generic_name:\\"${drugName}\\" AND products.marketing_status:Prescription",
+       "search_type": "general",
+       "fields_for_general": "products.dosage_form,products.route",
+       "limit": 5
+     }
+
+4. Supplier manufacturers for ${drugName}:
+   - Tool: fda_info
+   - Parameters: {
+       "method": "lookup_drug",
+       "search_term": "openfda.generic_name:\\"${drugName}\\" AND products.marketing_status:Prescription",
+       "search_type": "general",
+       "fields_for_general": "sponsor_name",
+       "limit": 8
+     }
+
+5. Therapeutic area shortage patterns (use derived category from query 1):
+   - Tool: fda_info
+   - Parameters: {
+       "method": "lookup_drug",
+       "search_term": "therapeutic_category:[DERIVED_THERAPEUTIC_CATEGORY] AND status:Current",
+       "search_type": "shortages",
+       "fields_for_shortages": "generic_name,company_name,shortage_reason",
+       "limit": 5
+     }`;
+    }
+
+    prompt += `
+
+**Critical Parameter Guidelines:**
+- Therapeutic categories are case-sensitive (use "Oncology", "Pediatric", "Cardiovascular")
+- Quote multi-word status values: status:"To Be Discontinued"
+- Use status:Current for active shortages (wildcards don't work for shortages)
+
+**Analysis Framework:**
+- **Active Disruptions**: Current shortages and their root causes
+- **Therapeutic Vulnerability**: Categories most prone to shortages
+- **Supply Concentration**: Single vs multi-supplier dependency
+- **Manufacturing Resilience**: Formulation and delivery redundancy
+
+**Output Format:**
+1. **Current Supply Status** (3 bullets): Active shortages, primary causes, affected categories
+2. **Risk Assessment** (table): Supplier concentration and vulnerability metrics
+3. **Mitigation Strategy** (1 paragraph): Supply chain diversification and contingency recommendations
+
+Execute these queries in sequence and provide a comprehensive supply chain risk assessment.`;
+
+    return {
+      description: `Supply chain intelligence analysis for ${analysisTarget} (${providedType} provided)`,
+      messages: [
+        {
+          role: 'user',
+          content: {
+            type: 'text',
+            text: prompt
+          }
+        }
+      ]
+    };
+  } else if (name === 'fda_regulatory_intelligence') {
+    const drugName = args?.drug_name;
+    const companyName = args?.company_name;
+    if (!drugName && !companyName) {
+      throw new Error('Either drug_name or company_name argument is required');
+    }
+
+    const analysisTarget = drugName || companyName;
+    const providedType = drugName ? 'drug' : 'company';
+
+    let prompt;
+    if (drugName) {
+      prompt = `Conduct comprehensive regulatory analysis for ${drugName} with these intelligence queries:
+
+1. Core approval details and derive missing information:
+   - Tool: fda_info
+   - Parameters: {
+       "method": "lookup_drug",
+       "search_term": "${drugName.toLowerCase().includes('brand') || /^[A-Z]/.test(drugName) ? `products.brand_name:\\"${drugName}\\"` : `openfda.generic_name:\\"${drugName}\\"`}",
+       "search_type": "general",
+       "fields_for_general": "application_number,sponsor_name,openfda.brand_name,openfda.generic_name,products.marketing_status,submissions.submission_type,submissions.submission_status,submissions.submission_class_code,submissions.submission_status_date",
+       "limit": 1
+     }
+
+Note: From the result above, use the derived generic name (openfda.generic_name) and application number for subsequent queries.
+
+2. Safety surveillance profile from adverse events:
+   - Tool: fda_info
+   - Parameters: {
+       "method": "lookup_drug",
+       "search_term": "patient.drug.medicinalproduct:[DERIVED_GENERIC_NAME]",
+       "search_type": "adverse_events",
+       "count": "patient.reaction.reactionmeddrapt.exact",
+       "limit": 8
+     }
+
+3. Serious adverse events by demographics:
+   - Tool: fda_info
+   - Parameters: {
+       "method": "lookup_drug",
+       "search_term": "patient.drug.medicinalproduct:[DERIVED_GENERIC_NAME]+AND+serious:1",
+       "search_type": "adverse_events",
+       "count": "patient.patientsex",
+       "limit": 5
+     }
+
+4. Recent regulatory activity and submissions:
+   - Tool: fda_info
+   - Parameters: {
+       "method": "lookup_drug",
+       "search_term": "application_number:[DERIVED_APPLICATION_NUMBER]",
+       "search_type": "general",
+       "fields_for_general": "submissions.submission_type,submissions.submission_status,submissions.submission_class_code,submissions.submission_status_date",
+       "limit": 5
+     }
+
+5. Current supply chain status:
+   - Tool: fda_info
+   - Parameters: {
+       "method": "lookup_drug",
+       "search_term": "generic_name:[DERIVED_GENERIC_NAME]",
+       "search_type": "shortages",
+       "fields_for_shortages": "status,shortage_reason,update_date",
+       "limit": 3
+     }`;
+    } else {
+      prompt = `Conduct comprehensive regulatory analysis for ${companyName} with these intelligence queries:
+
+1. Company's drug portfolio and derive specific products:
+   - Tool: fda_info
+   - Parameters: {
+       "method": "lookup_drug",
+       "search_term": "sponsor_name:\\"${companyName}\\" AND products.marketing_status:Prescription",
+       "search_type": "general",
+       "fields_for_general": "application_number,openfda.brand_name,openfda.generic_name,products.marketing_status,submissions.submission_type,submissions.submission_status,submissions.submission_status_date",
+       "limit": 10
+     }
+
+Note: From the result above, select key products for detailed analysis in subsequent queries.
+
+2. Company's recent regulatory submissions:
+   - Tool: fda_info
+   - Parameters: {
+       "method": "lookup_drug",
+       "search_term": "sponsor_name:\\"${companyName}\\"",
+       "search_type": "general",
+       "fields_for_general": "submissions.submission_type,submissions.submission_status,submissions.submission_class_code,submissions.submission_status_date",
+       "limit": 10
+     }
+
+3. Safety surveillance for company's portfolio:
+   - Tool: fda_info
+   - Parameters: {
+       "method": "lookup_drug",
+       "search_term": "patient.drug.openfda.manufacturer_name:\\"${companyName}\\"",
+       "search_type": "adverse_events",
+       "count": "patient.reaction.reactionmeddrapt.exact",
+       "limit": 8
+     }
+
+4. Company's supply chain disruptions:
+   - Tool: fda_info
+   - Parameters: {
+       "method": "lookup_drug",
+       "search_term": "company_name:\\"${companyName}\\"",
+       "search_type": "shortages",
+       "fields_for_shortages": "generic_name,status,shortage_reason,update_date",
+       "limit": 5
+     }
+
+5. Market position and competitive analysis:
+   - Tool: fda_info
+   - Parameters: {
+       "method": "lookup_drug",
+       "search_term": "sponsor_name:\\"${companyName}\\" AND products.marketing_status:Prescription",
+       "search_type": "general",
+       "count": "openfda.product_type",
+       "limit": 5
+     }`;
+    }
+
+    prompt += `
+
+**Analysis Framework:**
+- **Regulatory Pathway**: Original approval date, submission history, review classifications
+- **Safety Surveillance**: Top adverse events, serious event patterns, demographic risks
+- **Current Status**: Recent submissions, labeling changes, ongoing regulatory actions
+- **Supply Security**: Manufacturing disruptions, shortage risks, regulatory interventions
+
+**Output Format:**
+1. **Regulatory Timeline** (table): Key approval milestones and submission history
+2. **Safety Profile** (3 bullets): Top adverse events, serious event rates, risk demographics
+3. **Current Status** (2 bullets): Recent regulatory activity and ongoing actions
+
+Execute these queries in sequence and provide a comprehensive FDA regulatory intelligence analysis.`;
+
+    return {
+      description: `FDA regulatory intelligence analysis for ${analysisTarget} (${providedType} provided)`,
+      messages: [
+        {
+          role: 'user',
+          content: {
+            type: 'text',
+            text: prompt
+          }
+        }
+      ]
+    };
+  } else if (name === 'weekly_regulatory_monitoring') {
+    const targetEntity = args?.target_entity;
+    const currentDate = args?.current_date;
+    if (!targetEntity) {
+      throw new Error('target_entity argument is required');
+    }
+    if (!currentDate) {
+      throw new Error('current_date argument is required');
+    }
+
+    // Calculate date ranges - use 3 weeks ago for monitoring (2-3 week FDA processing delay)
+    const current = new Date(currentDate);
+    const threeWeeksAgo = new Date(current);
+    threeWeeksAgo.setDate(current.getDate() - 21);
+
+    // Get Monday of that week
+    const lastWeekStart = new Date(threeWeeksAgo);
+    lastWeekStart.setDate(threeWeeksAgo.getDate() - threeWeeksAgo.getDay() + 1);
+
+    // Get Sunday of that week
+    const lastWeekEnd = new Date(lastWeekStart);
+    lastWeekEnd.setDate(lastWeekStart.getDate() + 6);
+
+    // Format as YYYYMMDD
+    const formatDate = (date) => {
+      return date.getFullYear().toString() +
+             (date.getMonth() + 1).toString().padStart(2, '0') +
+             date.getDate().toString().padStart(2, '0');
+    };
+
+    const lastWeekStartFormatted = formatDate(lastWeekStart);
+    const lastWeekEndFormatted = formatDate(lastWeekEnd);
+
+    const prompt = `Today is ${currentDate}. Create automated weekly monitoring for ${targetEntity} with these surveillance queries (using data from ${lastWeekStartFormatted} to ${lastWeekEndFormatted} accounting for FDA processing delay):
+
+**1. Core Regulatory Intelligence** (3 queries)
+
+1.1. Weekly regulatory activity:
+   - Tool: fda_info
+   - Parameters: {
+       "method": "lookup_drug",
+       "search_term": "submissions.submission_status_date:[${lastWeekStartFormatted}+TO+${lastWeekEndFormatted}]",
+       "search_type": "general",
+       "fields_for_general": "sponsor_name,openfda.brand_name,submissions.submission_class_code,submissions.submission_status_date",
+       "limit": 10
+     }
+
+1.2. Priority review pipeline:
+   - Tool: fda_info
+   - Parameters: {
+       "method": "lookup_drug",
+       "search_term": "submissions.review_priority:\\"PRIORITY\\"",
+       "search_type": "general",
+       "fields_for_general": "sponsor_name,openfda.brand_name,submissions.submission_class_code,submissions.submission_status_date",
+       "limit": 8
+     }
+
+1.3. Target entity focus:
+   - Tool: fda_info
+   - Parameters: {
+       "method": "lookup_drug",
+       "search_term": "sponsor_name:\\"${targetEntity}\\" OR openfda.generic_name:\\"${targetEntity}\\" OR openfda.pharm_class_epc:\\"${targetEntity}\\"",
+       "search_type": "general",
+       "fields_for_general": "sponsor_name,openfda.brand_name,submissions.submission_type,submissions.submission_status_date",
+       "limit": 10
+     }
+
+**2. Safety Intelligence** (2 queries)
+
+2.1. Weekly adverse events:
+   - Tool: fda_info
+   - Parameters: {
+       "method": "lookup_drug",
+       "search_term": "receivedate:[${lastWeekStartFormatted}+TO+${lastWeekEndFormatted}]",
+       "search_type": "adverse_events",
+       "count": "patient.drug.medicinalproduct.exact",
+       "limit": 10
+     }
+
+2.2. Targeted safety signals:
+   - Tool: fda_info
+   - Parameters: {
+       "method": "lookup_drug",
+       "search_term": "(patient.drug.medicinalproduct:\\"${targetEntity}\\" OR patient.drug.openfda.brand_name:\\"${targetEntity}\\") AND serious:1 AND receivedate:[${lastWeekStartFormatted}+TO+${lastWeekEndFormatted}]",
+       "search_type": "adverse_events",
+       "count": "patient.reaction.reactionmeddrapt.exact",
+       "limit": 8
+     }
+
+**3. Supply Chain Intelligence** (1 query)
+
+3.1. Targeted shortages:
+   - Tool: fda_info
+   - Parameters: {
+       "method": "lookup_drug",
+       "search_term": "status:\\"Current\\" AND (generic_name:\\"${targetEntity}\\" OR company_name:\\"${targetEntity}\\")",
+       "search_type": "shortages",
+       "fields_for_shortages": "generic_name,company_name,shortage_reason,update_date",
+       "limit": 10
+     }
+
+**Date Range Calculation Details:**
+- Current date: ${currentDate}
+- Monitoring period: ${lastWeekStartFormatted} to ${lastWeekEndFormatted} (3 weeks ago)
+- Processing delay: Accounts for 2-3 week FDA data processing delay
+- Format: YYYYMMDD (Year-Month-Day with no separators)
+
+**Output Format:**
+1. **Executive Summary** (3 bullet points): Key developments, emerging risks, competitive threats
+2. **Regulatory Activity Table**: New approvals, submissions, status changes with dates
+3. **Safety Alerts** (2 bullet points): Notable adverse event patterns, regulatory communications
+4. **Strategic Implications** (1 paragraph): Impact assessment and recommended actions
+
+Format as readable bullet points and paragraphs, not as JSON or structured data.
+
+Execute these queries in sequence and provide a comprehensive weekly pharmaceutical regulatory intelligence report.`;
+
+    return {
+      description: `Weekly regulatory monitoring report for ${targetEntity} (period: ${lastWeekStartFormatted}-${lastWeekEndFormatted})`,
+      messages: [
+        {
+          role: 'user',
+          content: {
+            type: 'text',
+            text: prompt
+          }
+        }
+      ]
+    };
+  } else if (name === 'fda_market_intelligence') {
+    const drugName = args?.drug_name;
+    const companyName = args?.company_name;
+    if (!drugName && !companyName) {
+      throw new Error('Either drug_name or company_name argument is required');
+    }
+
+    const analysisTarget = drugName || companyName;
+    const providedType = drugName ? 'drug' : 'company';
+
+    let prompt;
+    if (drugName) {
+      prompt = `Generate FDA-focused market intelligence for ${drugName} with these regulatory queries:
+
+1. Derive complete drug information and application details:
+   - Tool: fda_info
+   - Parameters: {
+       "method": "lookup_drug",
+       "search_term": "${drugName.toLowerCase().includes('brand') || /^[A-Z]/.test(drugName) ? `products.brand_name:\\"${drugName}\\"` : `openfda.generic_name:\\"${drugName}\\"`}",
+       "search_type": "general",
+       "fields_for_general": "application_number,sponsor_name,openfda.brand_name,openfda.generic_name,products.te_code,products.marketing_status",
+       "limit": 1
+     }
+
+Note: From the result above, use the derived application_number and generic_name for subsequent analyses.
+
+2. Patent protection and exclusivity timeline:
+   - Tool: fda_info
+   - Parameters: {
+       "method": "lookup_drug",
+       "search_term": "application_number:[DERIVED_APPLICATION_NUMBER]",
+       "search_type": "general",
+       "fields_for_general": "application_number,products.te_code,openfda.brand_name,openfda.generic_name,products.marketing_status,submissions.submission_class_code,submissions.submission_status_date",
+       "limit": 5
+     }
+
+3. Generic competition market entry risk assessment:
+   - Tool: fda_info
+   - Parameters: {
+       "method": "lookup_drug",
+       "search_term": "openfda.generic_name:[DERIVED_GENERIC_NAME] AND products.marketing_status:Prescription",
+       "search_type": "general",
+       "count": "sponsor_name",
+       "limit": 10
+     }
+
+4. Competitive landscape and reference drug status:
+   - Tool: fda_info
+   - Parameters: {
+       "method": "lookup_drug",
+       "search_term": "openfda.generic_name:[DERIVED_GENERIC_NAME] AND products.marketing_status:Prescription",
+       "search_type": "general",
+       "fields_for_general": "sponsor_name,products.reference_drug,products.te_code",
+       "limit": 8
+     }
+
+5. Regulatory pathway impact on market access:
+   - Tool: fda_info
+   - Parameters: {
+       "method": "lookup_drug",
+       "search_term": "openfda.brand_name:[DERIVED_BRAND_NAME]",
+       "search_type": "general",
+       "fields_for_general": "submissions.submission_class_code,submissions.submission_status,submissions.submission_status_date,products.marketing_status,submissions.review_priority",
+       "limit": 5
+     }`;
+    } else {
+      prompt = `Generate FDA-focused market intelligence for ${companyName} with these regulatory queries:
+
+1. Company portfolio and market positioning:
+   - Tool: fda_info
+   - Parameters: {
+       "method": "lookup_drug",
+       "search_term": "sponsor_name:\\"${companyName}\\" AND products.marketing_status:Prescription",
+       "search_type": "general",
+       "fields_for_general": "application_number,openfda.brand_name,openfda.generic_name,products.te_code,products.marketing_status,submissions.submission_class_code",
+       "limit": 15
+     }
+
+2. Patent cliff analysis across portfolio:
+   - Tool: fda_info
+   - Parameters: {
+       "method": "lookup_drug",
+       "search_term": "sponsor_name:\\"${companyName}\\" AND products.marketing_status:Prescription",
+       "search_type": "general",
+       "fields_for_general": "openfda.brand_name,openfda.generic_name,products.te_code,submissions.submission_status_date",
+       "limit": 10
+     }
+
+3. Generic competition exposure across key products:
+   - Tool: fda_info
+   - Parameters: {
+       "method": "lookup_drug",
+       "search_term": "sponsor_name:\\"${companyName}\\" AND products.marketing_status:Prescription AND products.reference_drug:Yes",
+       "search_type": "general",
+       "fields_for_general": "openfda.brand_name,openfda.generic_name,products.te_code",
+       "limit": 8
+     }
+
+4. Regulatory pathway advantages and breakthrough designations:
+   - Tool: fda_info
+   - Parameters: {
+       "method": "lookup_drug",
+       "search_term": "sponsor_name:\\"${companyName}\\" AND (submissions.review_priority:\\"PRIORITY\\" OR submissions.submission_class_code:\\"BLA\\")",
+       "search_type": "general",
+       "fields_for_general": "openfda.brand_name,submissions.submission_class_code,submissions.review_priority,submissions.submission_status_date",
+       "limit": 8
+     }
+
+5. Market access and competitive moats assessment:
+   - Tool: fda_info
+   - Parameters: {
+       "method": "lookup_drug",
+       "search_term": "sponsor_name:\\"${companyName}\\" AND products.marketing_status:Prescription",
+       "search_type": "general",
+       "count": "products.te_code",
+       "limit": 5
+     }`;
+    }
+
+    prompt += `
+
+**FDA Market Intelligence Analysis Framework:**
+- **Patent Cliff Analysis**: Exclusivity timeline, TE codes, generic entry risk assessment
+- **Competitive Moats**: Reference drug status, regulatory barriers, submission classifications
+- **Market Positioning**: Priority review designations, breakthrough therapy status, approval pathways
+- **Investment Risk Assessment**: Generic competition timeline, regulatory advantage duration
+
+**Output Format:**
+1. **Patent Protection Status** (table): TE codes, exclusivity indicators, reference drug status
+2. **Competitive Moats** (3 bullets): Patent protection, regulatory barriers, market positioning advantages
+3. **Investment Risk Assessment** (1 paragraph): Generic entry timeline, competitive threats, regulatory catalyst opportunities
+
+Execute these queries in sequence and provide FDA-focused market intelligence for investment decision-making.`;
+
+    return {
+      description: `FDA market intelligence analysis for ${analysisTarget} (${providedType} provided)`,
+      messages: [
+        {
+          role: 'user',
+          content: {
+            type: 'text',
+            text: prompt
+          }
+        }
+      ]
+    };
+  } else {
+    throw new Error(`Unknown prompt: ${name}`);
+  }
+});
+
+// Start the server
+async function main() {
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+  
+  // Log to stderr so it doesn't interfere with JSON-RPC
+  process.stderr.write('FDA MCP server running on stdio\n');
+}
+
+main().catch((error) => {
+  process.stderr.write(`Server error: ${error}\n`);
+  process.exit(1);
+}); 

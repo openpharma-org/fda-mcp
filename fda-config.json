@@ -1,0 +1,121 @@
+{
+  "server": {
+    "name": "FDA MCP Server",
+    "version": "1.0.0",
+    "description": "FDA MCP Server for drug and device information lookup with comprehensive safety and regulatory intelligence",
+    "enableLogging": true,
+    "logLevel": "info"
+  },
+  "features": {
+    "tools": {
+      "enabled": true,
+      "fda_info": {
+        "enabled": true,
+        "description": "Core FDA database lookup tool for drugs and devices"
+      }
+    },
+    "prompts": {
+      "enabled": true,
+      "fda_company_portfolio_analysis": {
+        "enabled": true,
+        "description": "Company drug portfolio analysis, market positioning, and regulatory activity assessment"
+      },
+      "fda_drug_safety_profile": {
+        "enabled": true,
+        "description": "Comprehensive adverse event analysis with demographics, reactions, and risk patterns"
+      },
+      "fda_generic_competition_landscape": {
+        "enabled": true,
+        "description": "Generic vs. brand drug competition assessment with market maturity analysis"
+      },
+      "fda_supply_chain_risk_assessment": {
+        "enabled": true,
+        "description": "Shortage vulnerability analysis and manufacturing resilience assessment"
+      },
+      "fda_regulatory_due_diligence": {
+        "enabled": true,
+        "description": "Multi-factor regulatory intelligence for investment and business decisions"
+      },
+      "fda_weekly_surveillance_report": {
+        "enabled": false,
+        "description": "Automated weekly surveillance across regulatory activity and safety signals"
+      },
+      "fda_market_access_analysis": {
+        "enabled": true,
+        "description": "Patent protection, regulatory pathways, and market access barriers analysis"
+      }
+    },
+    "resources": {
+      "enabled": true,
+      "current_safety_alerts": {
+        "enabled": true,
+        "description": "Real-time black box warnings and Class I recalls with risk assessment"
+      },
+      "trending_adverse_events": {
+        "enabled": true,
+        "description": "Top 10 drugs by recent adverse event volume with statistical analysis"
+      },
+      "emerging_safety_signals": {
+        "enabled": false,
+        "description": "Recent safety alerts and emerging signals"
+      },
+      "recent_approvals": {
+        "enabled": false,
+        "description": "Recent FDA drug and device approvals"
+      },
+      "active_recalls": {
+        "enabled": true,
+        "description": "Comprehensive recall analysis by classification with impact assessment"
+      },
+      "current_shortages": {
+        "enabled": true,
+        "description": "Real-time drug shortage tracking with NDC codes and operational details"
+      },
+      "high_risk_therapeutic_areas": {
+        "enabled": true,
+        "description": "Multi-factor risk analysis combining shortages, safety, and discontinuation data"
+      },
+      "regulatory_pathways": {
+        "enabled": false,
+        "description": "FDA regulatory pathways and approval processes"
+      }
+    }
+  },
+  "api": {
+    "fda": {
+      "baseUrl": "https://api.fda.gov",
+      "timeout": 30000,
+      "retryAttempts": 3,
+      "retryDelay": 1000,
+      "rateLimiting": {
+        "enabled": true,
+        "maxRequestsPerMinute": 240,
+        "burstLimit": 10
+      }
+    }
+  },
+  "caching": {
+    "enabled": true,
+    "defaultTtl": 300000,
+    "maxSize": 1000,
+    "cleanupInterval": 3600000
+  },
+  "performance": {
+    "enableRequestThrottling": true,
+    "maxConcurrentRequests": 10,
+    "enableCompression": true,
+    "enableProfiling": false
+  },
+  "security": {
+    "enableInputValidation": true,
+    "maxRequestSize": "10mb",
+    "enableCors": false,
+    "sanitizeInputs": true
+  },
+  "development": {
+    "enableDebugMode": false,
+    "mockApiResponses": false,
+    "enablePerformanceMetrics": true,
+    "logSensitiveData": false
+  }
+}
