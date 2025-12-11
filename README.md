@@ -39,13 +39,13 @@ A comprehensive Model Context Protocol (MCP) server that provides advanced pharm
 ### Option 1: Install from NPM
 
 ```bash
-npm install -g @uh-joan/fda-mcp-server
+npm install -g @openpharma-org/fda-mcp
 ```
 
 ### Option 2: Install from Source
 
 ```bash
-git clone https://github.com/uh-joan/fda-mcp-server.git
+git clone https://github.com/openpharma-org/fda-mcp.git
 cd fda-mcp-server
 npm install
 npm link
@@ -784,7 +784,7 @@ Multi-factor risk analysis combining shortages, safety, and discontinuation data
 
 ### Setup
 ```bash
-git clone https://github.com/uh-joan/fda-mcp-server.git
+git clone https://github.com/openpharma-org/fda-mcp.git
 cd fda-mcp-server
 npm install
 ```
@@ -867,12 +867,12 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Related Projects
 
-- [PubMed MCP Server](https://github.com/uh-joan/pubmed-mcp-server) - Access biomedical literature
+- [PubMed MCP Server](https://github.com/openpharma-org/pubmed-mcp) - Access biomedical literature
 - [Model Context Protocol](https://github.com/modelcontextprotocol) - Learn more about MCP
 
 ## Support
 
-- 📧 **Issues**: [GitHub Issues](https://github.com/uh-joan/fda-mcp-server/issues)
+- 📧 **Issues**: [GitHub Issues](https://github.com/openpharma-org/fda-mcp/issues)
 - 📖 **FDA API Documentation**: [openFDA API](https://open.fda.gov/apis/)
 - 🔧 **MCP Documentation**: [Model Context Protocol](https://modelcontextprotocol.io/)
 
