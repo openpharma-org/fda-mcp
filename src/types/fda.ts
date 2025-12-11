@@ -16,6 +16,7 @@ export type FdaSearchType =
   | 'adverse_events'
   | 'recalls'
   | 'shortages'
+  | 'substance'
   | 'device_registration'
   | 'device_pma'
   | 'device_510k'
@@ -43,6 +44,7 @@ export interface FdaRequestParams {
   fields_for_label?: string;
   fields_for_recalls?: string;
   fields_for_shortages?: string;
+  fields_for_substance?: string;
   fields_for_device_registration?: string;
   fields_for_device_pma?: string;
   fields_for_device_510k?: string;
@@ -142,6 +144,7 @@ export const FdaSearchTypeSchema = z.enum([
   'adverse_events',
   'recalls',
   'shortages',
+  'substance',
   'device_registration',
   'device_pma',
   'device_510k',
@@ -166,6 +169,7 @@ export const FdaRequestParamsSchema = z.object({
   fields_for_label: z.string().optional(),
   fields_for_recalls: z.string().optional(),
   fields_for_shortages: z.string().optional(),
+  fields_for_substance: z.string().optional(),
   fields_for_device_registration: z.string().optional(),
   fields_for_device_pma: z.string().optional(),
   fields_for_device_510k: z.string().optional(),

@@ -48,6 +48,8 @@ export class FdaFieldValidator implements FieldValidator {
         return this.getDeviceAdverseEventsFields();
       case 'device_classification':
         return this.getDeviceClassificationFields();
+      case 'substance':
+        return this.getSubstanceFields();
       default:
         return this.getDrugsFDAFields();
     }
@@ -895,6 +897,45 @@ export class FdaFieldValidator implements FieldValidator {
       'openfda.k_number',
       'openfda.registration_number',
       'openfda.fei_number'
+    ];
+  }
+
+  /**
+   * Get fields for substance.json endpoint (Substance/UNII data)
+   */
+  private getSubstanceFields(): string[] {
+    return [
+      // Core substance identification
+      'unii',
+      'substance_name',
+      // Codes and identifiers
+      'codes.code',
+      'codes.type',
+      'codes.code_system',
+      'codes.url',
+      // Relationships (including active moiety, targets, inhibitors)
+      'relationships.type',
+      'relationships.qualification',
+      'relationships.related_substance.name',
+      'relationships.related_substance.unii',
+      'relationships.amount.average',
+      'relationships.amount.units',
+      // Names and synonyms
+      'names.name',
+      'names.type',
+      // Properties
+      'properties.name',
+      'properties.value',
+      // Structure
+      'structure.molecular_formula',
+      'structure.molecular_weight',
+      'structure.smiles',
+      // Modifications
+      'modifications.agent_modifications',
+      'modifications.structural_modifications',
+      // References
+      'references.citation',
+      'references.doc_type'
     ];
   }
 }

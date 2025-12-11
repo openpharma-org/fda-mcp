@@ -180,6 +180,7 @@ export class FdaApiClient {
       adverse_events: 'fields_for_adverse_events',
       recalls: 'fields_for_recalls',
       shortages: 'fields_for_shortages',
+      substance: 'fields_for_substance',
       device_registration: 'fields_for_device_registration',
       device_pma: 'fields_for_device_pma',
       device_510k: 'fields_for_device_510k',

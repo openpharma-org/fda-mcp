@@ -69,6 +69,7 @@ export const DEFAULT_CONFIGURATION: ConfigurationDefaults = {
       'adverse_events',
       'recalls',
       'shortages',
+      'substance',
       'device_registration',
       'device_pma',
       'device_510k',
@@ -157,7 +158,8 @@ export const FDA_API_ENDPOINTS = {
     label: '/drug/label.json',
     adverse_events: '/drug/event.json',
     recalls: '/drug/enforcement.json',
-    shortages: '/drug/shortages.json'
+    shortages: '/drug/shortages.json',
+    substance: '/other/substance.json'
   },
   device: {
     registration: '/device/registrationlisting.json',
