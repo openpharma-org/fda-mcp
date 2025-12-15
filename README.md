@@ -4,76 +4,41 @@ A comprehensive Model Context Protocol (MCP) server that provides advanced pharm
 
 ## Features
 
-### 🛠️ **Core Tool**
-- 🔍 **FDA Database Access**: Unified tool for searching across ALL FDA database fields with advanced query capabilities
-- 🧠 **Complex Query Support**: Boolean operators (AND, OR), field combinations, range queries, wildcards, and special modifiers
-- 🎯 **Multi-Database Search**: Access drug labels, adverse events, recalls, shortages, and regulatory data
-- 🔄 **Field-Specific Targeting**: 350+ searchable fields across all FDA databases
+### **Core Tool**
+- **FDA Database Access**: Unified tool for searching across ALL FDA database fields with advanced query capabilities
+- **Complex Query Support**: Boolean operators (AND, OR), field combinations, range queries, wildcards, and special modifiers
+- **Multi-Database Search**: Access drug labels, adverse events, recalls, shortages, and regulatory data
+- **Field-Specific Targeting**: 350+ searchable fields across all FDA databases
 
-### 📋 **Intelligent Analysis Prompts (7 Available)**
-- 🩺 **FDA Drug Safety Profile**: Comprehensive adverse event analysis with demographics and risk patterns
-- 🏢 **FDA Company Portfolio Analysis**: Competitive intelligence and market position analysis
-- 🔀 **FDA Generic Competition Landscape**: Generic vs. brand drug competition assessment
-- 📦 **FDA Supply Chain Risk Assessment**: Shortage vulnerability and manufacturing resilience analysis
-- 📋 **FDA Regulatory Due Diligence**: Multi-factor regulatory intelligence for business decisions
-- 📈 **FDA Market Access Analysis**: Patent protection, regulatory pathways, and market barriers
-- 📊 **FDA Weekly Surveillance Report**: Automated monitoring across regulatory activity and safety signals
+### **Intelligent Analysis Prompts (7 Available)**
+- **FDA Drug Safety Profile**: Comprehensive adverse event analysis with demographics and risk patterns
+- **FDA Company Portfolio Analysis**: Competitive intelligence and market position analysis
+- **FDA Generic Competition Landscape**: Generic vs. brand drug competition assessment
+- **FDA Supply Chain Risk Assessment**: Shortage vulnerability and manufacturing resilience analysis
+- **FDA Regulatory Due Diligence**: Multi-factor regulatory intelligence for business decisions
+- **FDA Market Access Analysis**: Patent protection, regulatory pathways, and market barriers
+- **FDA Weekly Surveillance Report**: Automated monitoring across regulatory activity and safety signals
 
-### 📊 **Executive Intelligence Resources (5 Available)**
-- 🚨 **Current Safety Alerts**: Real-time black box warnings and Class I recalls with risk assessment
-- 📈 **Trending Adverse Events**: Top drugs by recent adverse event volume with statistical analysis
-- 🏥 **Active Recalls**: Comprehensive recall analysis by classification with impact assessment
-- 💊 **Current Shortages**: Real-time drug shortage tracking with operational details
-- ⚠️ **High-Risk Therapeutic Areas**: Multi-factor risk analysis combining shortages, safety, and discontinuation data
+### **Executive Intelligence Resources (5 Available)**
+- **Current Safety Alerts**: Real-time black box warnings and Class I recalls with risk assessment
+- **Trending Adverse Events**: Top drugs by recent adverse event volume with statistical analysis
+- **Active Recalls**: Comprehensive recall analysis by classification with impact assessment
+- **Current Shortages**: Real-time drug shortage tracking with operational details
+- **High-Risk Therapeutic Areas**: Multi-factor risk analysis combining shortages, safety, and discontinuation data
 
-### ⚙️ **Advanced Configuration**
-- 🎛️ **Configurable Components**: Enable/disable individual tools, prompts, and resources via JSON configuration
-- 🔧 **Settings Management**: Comprehensive configuration system with validation and fallbacks
-- 📊 **Dynamic Registration**: Components register conditionally based on configuration settings
+### **Advanced Configuration**
+- **Configurable Components**: Enable/disable individual tools, prompts, and resources via JSON configuration
+- **Settings Management**: Comprehensive configuration system with validation and fallbacks
+- **Dynamic Registration**: Components register conditionally based on configuration settings
 
-## 🚀 **Quick Start**
-
-```bash
-# Install and build
-npm install
-npm run build
-
-# Run the server
-node build/index.js
-```
-
-## 📋 **MCP Client Configuration**
-
-### Claude Desktop
+## **MCP Client Configuration**
 
 ```json
 {
   "mcpServers": {
     "opentargets-server": {
       "command": "node",
-      "args": ["/path/to/fda-server/build/index.js"]
-    }
-  }
-}
-```
-
-### Other MCP Clients
-
-```bash
-node /path/to/fda-server/build/index.js
-```
-
-## Configuration
-
-### Claude Desktop Integration
-
-Add the following to your Claude Desktop configuration file:
-
-```json
-{
-  "mcpServers": {
-    "fda": {
-      "command": "fda-mcp-server",
+      "args": ["/path/to/fda-server/build/index.js"],
       "env": {
         "FDA_API_KEY": "your_api_key_here"
       }
@@ -81,53 +46,6 @@ Add the following to your Claude Desktop configuration file:
   }
 }
 ```
-
-### Advanced Configuration
-
-The server uses a comprehensive configuration system via `fda-config.json` in the project root:
-
-```json
-{
-  "server": {
-    "name": "FDA MCP Server",
-    "version": "1.0.0",
-    "enableLogging": true,
-    "logLevel": "info"
-  },
-  "features": {
-    "tools": {
-      "enabled": true,
-      "fda_info": {
-        "enabled": true,
-        "description": "Core FDA database lookup tool"
-      }
-    },
-    "prompts": {
-      "enabled": true,
-      "fda_drug_safety_profile": { "enabled": true },
-      "fda_company_portfolio_analysis": { "enabled": true },
-      "fda_generic_competition_landscape": { "enabled": true },
-      "fda_supply_chain_risk_assessment": { "enabled": true },
-      "fda_regulatory_due_diligence": { "enabled": true },
-      "fda_market_access_analysis": { "enabled": true },
-      "fda_weekly_surveillance_report": { "enabled": true }
-    },
-    "resources": {
-      "enabled": true,
-      "current_safety_alerts": { "enabled": true },
-      "trending_adverse_events": { "enabled": true },
-      "active_recalls": { "enabled": true },
-      "current_shortages": { "enabled": true },
-      "high_risk_therapeutic_areas": { "enabled": true }
-    }
-  }
-}
-```
-
-### Environment Variables
-
-- `FDA_API_KEY` (optional): Your FDA API key for higher rate limits. Register at https://open.fda.gov/apis/
-- `LOG_LEVEL` (optional): Set logging level (`debug`, `info`, `warn`, `error`)
 
 ## API Reference
 
@@ -780,108 +698,3 @@ Multi-factor risk analysis combining shortages, safety, and discontinuation data
 - **Data Source**: Multi-database analysis (Shortages + FAERS + Drugs@FDA)
 - **Content**: Risk-ranked therapeutic areas, convergence analysis, strategic insights
 - **Update Frequency**: Real-time multi-factor calculation
-
-## Rate Limits
-
-- **Without API Key**: 240 requests per minute, 1,000 requests per day
-- **With API Key**: 120,000 requests per day (register at https://open.fda.gov/apis/)
-
-## Development
-
-### Setup
-```bash
-git clone https://github.com/openpharma-org/fda-mcp.git
-cd fda-mcp-server
-npm install
-```
-
-### Testing
-```bash
-# Test the server directly
-echo '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | node src/index.js
-
-# Test with a drug lookup
-echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"fda_info","arguments":{"method":"lookup_drug","search_term":"aspirin"}}}' | node src/index.js
-```
-
-### File Structure
-```
-fda-mcp-server/
-├── src/
-│   ├── index.ts              # Main MCP server entry point
-│   ├── api/                  # FDA API client and utilities
-│   │   ├── client.ts         # FDA API client with rate limiting
-│   │   └── transform.ts      # Data transformation utilities
-│   ├── config/               # Configuration management
-│   │   └── settings.ts       # Settings manager and validation
-│   ├── errors/               # Error handling
-│   │   └── index.ts          # Custom error classes
-│   ├── logging/              # Logging infrastructure
-│   │   └── index.ts          # Logger configuration
-│   ├── prompts/              # Intelligent analysis prompts
-│   │   ├── base.ts           # Base prompt classes
-│   │   ├── enhanced-base.ts  # Enhanced prompt with validation
-│   │   ├── drug-safety.ts    # FDA Drug Safety Profile
-│   │   ├── competitive-intel.ts # FDA Company Portfolio Analysis
-│   │   ├── generic-competition.ts # FDA Generic Competition Landscape
-│   │   ├── supply-chain.ts   # FDA Supply Chain Risk Assessment
-│   │   ├── regulatory-intel.ts # FDA Regulatory Due Diligence
-│   │   ├── market-intel.ts   # FDA Market Access Analysis
-│   │   ├── weekly-monitoring.ts # FDA Weekly Surveillance Report
-│   │   └── index.ts          # Prompt registry and registration
-│   ├── resources/            # Executive intelligence resources
-│   │   ├── base.ts           # Base resource classes
-│   │   ├── current-safety-alerts.ts # Current Safety Alerts
-│   │   ├── trending-adverse-events.ts # Trending Adverse Events
-│   │   ├── active-recalls.ts # Active Recalls
-│   │   ├── current-shortages.ts # Current Shortages
-│   │   ├── high-risk-therapeutic-areas.ts # High-Risk Therapeutic Areas
-│   │   └── index.ts          # Resource registry and registration
-│   ├── servers/              # MCP server implementations
-│   │   └── fda-mcp.ts        # FDA MCP server implementation
-│   ├── tools/                # MCP tools
-│   │   ├── base.ts           # Base tool classes
-│   │   ├── fda-info.ts       # FDA database lookup tool
-│   │   └── index.ts          # Tool registry and registration
-│   ├── types/                # TypeScript type definitions
-│   │   └── fda.ts            # FDA API and schema types
-│   └── utils/                # Utility functions
-│       ├── cache.ts          # Caching utilities
-│       └── registry.ts       # Component registry utilities
-├── build/                    # Compiled JavaScript output
-├── scripts/                  # Build and utility scripts
-├── tests/                    # Test files
-├── docs/                     # Documentation
-├── fda-config.json          # Server configuration
-├── tsconfig.json            # TypeScript configuration
-├── package.json             # Project configuration
-├── README.md               # Documentation
-└── LICENSE                 # MIT License
-```
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Related Projects
-
-- [PubMed MCP Server](https://github.com/openpharma-org/pubmed-mcp) - Access biomedical literature
-- [Model Context Protocol](https://github.com/modelcontextprotocol) - Learn more about MCP
-
-## Support
-
-- 📧 **Issues**: [GitHub Issues](https://github.com/openpharma-org/fda-mcp/issues)
-- 📖 **FDA API Documentation**: [openFDA API](https://open.fda.gov/apis/)
-- 🔧 **MCP Documentation**: [Model Context Protocol](https://modelcontextprotocol.io/)
-
----
-
-Built with ❤️ for safer medication information access
