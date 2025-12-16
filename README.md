@@ -36,12 +36,10 @@ A comprehensive Model Context Protocol (MCP) server that provides advanced pharm
 ```json
 {
   "mcpServers": {
-    "fda-server": {
+    "fda-mcp-server": {
       "command": "node",
-      "args": ["/path/to/fda-server/build/index.js"],
-      "env": {
-        "FDA_API_KEY": "your_api_key_here"
-      }
+      "args": ["/path/to/fda-mcp-server/build/index.js"],
+      "env": {}
     }
   }
 }
