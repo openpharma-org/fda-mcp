@@ -36,7 +36,7 @@ A comprehensive Model Context Protocol (MCP) server that provides advanced pharm
 ```json
 {
   "mcpServers": {
-    "opentargets-server": {
+    "fda-server": {
       "command": "node",
       "args": ["/path/to/fda-server/build/index.js"],
       "env": {
@@ -462,7 +462,7 @@ The FDA MCP Server supports powerful openFDA query syntax for advanced searches:
 
 ### Available Search Fields
 
-The API supports searching across 350+ FDA database fields total. Use field-specific parameters for targeted searches:
+The API supports searching across FDA database fields total. Use field-specific parameters for targeted searches:
 
 - **`fields_for_general`**: 34 fields for general drug data searches
 - **`fields_for_adverse_events`**: 66 fields for adverse events searches
