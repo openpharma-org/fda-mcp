@@ -308,21 +308,53 @@ export class OrangePurpleBookService {
     const product = searchResult.brandProducts[0];
     const patentExclusivity = this.getPatentExclusivity(product.applNo);
 
-    // Find next expiration
-    const patents = patentExclusivity.patents
+    const now = new Date();
+
+    // Helper to parse date strings like "Aug 13, 2025" or "Jan 28, 2028"
+    const parseDate = (dateStr: string): Date | null => {
+      if (!dateStr) return null;
+      const parsed = new Date(dateStr);
+      return isNaN(parsed.getTime()) ? null : parsed;
+    };
+
+    // Helper to check if a date is in the future
+    const isFuture = (dateStr: string): boolean => {
+      const date = parseDate(dateStr);
+      return date ? date > now : false;
+    };
+
+    // Sort by actual date, not string comparison
+    const sortByDate = (dateStrA: string, dateStrB: string): number => {
+      const dateA = parseDate(dateStrA);
+      const dateB = parseDate(dateStrB);
+      if (!dateA && !dateB) return 0;
+      if (!dateA) return 1;
+      if (!dateB) return -1;
+      return dateA.getTime() - dateB.getTime();
+    };
+
+    // All patents with expiration dates, sorted by actual date
+    const allPatents = patentExclusivity.patents
       .filter((p) => p.patentExpireDate)
-      .sort((a, b) => a.patentExpireDate.localeCompare(b.patentExpireDate));
+      .sort((a, b) => sortByDate(a.patentExpireDate, b.patentExpireDate));
 
-    const exclusivities = patentExclusivity.exclusivity
+    // Only future (active) patents
+    const activePatents = allPatents.filter((p) => isFuture(p.patentExpireDate));
+
+    // All exclusivities with dates, sorted by actual date
+    const allExclusivities = patentExclusivity.exclusivity
       .filter((e) => e.exclusivityDate)
-      .sort((a, b) => a.exclusivityDate.localeCompare(b.exclusivityDate));
+      .sort((a, b) => sortByDate(a.exclusivityDate, b.exclusivityDate));
 
-    const nextPatentExpiration = patents[0]?.patentExpireDate || null;
-    const allPatentsExpire = patents[patents.length - 1]?.patentExpireDate || null;
-    const exclusivityExpires = exclusivities[0]?.exclusivityDate || null;
+    // Only future (active) exclusivities
+    const activeExclusivities = allExclusivities.filter((e) => isFuture(e.exclusivityDate));
 
-    // Generic entry is the later of patent or exclusivity expiration
-    const genericEntryEstimate = [nextPatentExpiration, exclusivityExpires]
+    const nextPatentExpiration = activePatents[0]?.patentExpireDate || null;
+    const allPatentsExpire = activePatents[activePatents.length - 1]?.patentExpireDate || null;
+    const exclusivityExpires = activeExclusivities[0]?.exclusivityDate || null;
+
+    // Generic entry is the later of the LAST patent or exclusivity expiration
+    const genericEntryEstimate = [allPatentsExpire, exclusivityExpires]
       .filter(Boolean)
       .sort()
       .reverse()[0] || null;
@@ -340,12 +372,12 @@ export class OrangePurpleBookService {
         genericEntryEstimate,
         yearsUntilLOE: yearsUntilLOE ? Math.round(yearsUntilLOE * 10) / 10 : null,
       },
-      patents: patents.map((p) => ({
+      patents: activePatents.map((p) => ({
         no: p.patentNo,
         expires: p.patentExpireDate,
         use: p.patentUseCode,
       })),
-      exclusivity: exclusivities.map((e) => ({
+      exclusivity: activeExclusivities.map((e) => ({
         code: e.exclusivityCode,
         expires: e.exclusivityDate,
       })),
