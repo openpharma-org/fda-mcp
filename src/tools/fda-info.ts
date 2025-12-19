@@ -11,6 +11,7 @@ import { cacheService } from '../utils/cache.js';
 import { toolRateLimiter } from '../utils/rate-limiter.js';
 import { logger } from '../logging/index.js';
 import { errorHandler } from '../errors/index.js';
+import { getOrangePurpleBookService } from '../services/orange-purple-book/index.js';
 
 export class FdaInfoTool extends BaseTool<FdaRequestParams> {
   private apiClient: FdaApiClient;
@@ -18,11 +19,160 @@ export class FdaInfoTool extends BaseTool<FdaRequestParams> {
   constructor() {
     super(
       'fda_info',
-      'Unified tool for FDA drug and medical device information lookup. Access drug labels, adverse events, regulatory information, recalls, shortages, and device registration data from the openFDA database.',
+      'Unified tool for FDA drug and medical device information lookup. Access drug labels, adverse events, regulatory information, recalls, shortages, device registration data, Orange Book (patents/exclusivity), and Purple Book (biosimilars) from the FDA.',
       McpFdaRequestParamsSchema
     );
 
     this.apiClient = new FdaApiClient();
+  }
+
+  /**
+   * Check if method is Orange/Purple Book related
+   */
+  private isOrangePurpleBookMethod(method: string): boolean {
+    return [
+      'search_orange_book',
+      'get_therapeutic_equivalents',
+      'get_patent_exclusivity',
+      'analyze_patent_cliff',
+      'search_purple_book',
+      'get_biosimilar_interchangeability'
+    ].includes(method);
+  }
+
+  /**
+   * Execute Orange/Purple Book methods
+   */
+  private async executeOrangePurpleBookMethod(
+    params: FdaRequestParams,
+    requestId: string,
+    startTime: number,
+    cancellationToken?: CancellationToken
+  ): Promise<ToolExecutionResult> {
+    try {
+      // Check for cancellation early
+      if (cancellationToken?.isCancelled) {
+        throw new Error(`Operation cancelled: ${cancellationToken.reason || 'No reason provided'}`);
+      }
+
+      const service = getOrangePurpleBookService();
+
+      // Ensure database is ready (will download on first use)
+      this.reportProgress(requestId, {
+        requestId,
+        stage: 'initializing',
+        progress: 20,
+        message: 'Preparing Orange/Purple Book database...',
+        timestamp: new Date().toISOString()
+      });
+
+      await service.ensureReady();
+
+      // Check for cancellation after database initialization
+      if (cancellationToken?.isCancelled) {
+        throw new Error(`Operation cancelled after database init: ${cancellationToken.reason || 'No reason provided'}`);
+      }
+
+      // Execute the appropriate method
+      this.reportProgress(requestId, {
+        requestId,
+        stage: 'executing',
+        progress: 60,
+        message: `Executing ${params.method}...`,
+        timestamp: new Date().toISOString()
+      });
+
+      let result: any;
+
+      switch (params.method) {
+        case 'search_orange_book':
+          result = service.searchOrangeBook(
+            params.drug_name || params.search_term,
+            params.include_generics ?? true
+          );
+          break;
+
+        case 'get_therapeutic_equivalents':
+          result = service.getTherapeuticEquivalents(
+            params.drug_name || params.search_term
+          );
+          break;
+
+        case 'get_patent_exclusivity':
+          if (!params.nda_number) {
+            throw new Error('nda_number is required for get_patent_exclusivity');
+          }
+          result = service.getPatentExclusivity(params.nda_number);
+          break;
+
+        case 'analyze_patent_cliff':
+          result = service.analyzePatentCliff(
+            params.drug_name || params.search_term,
+            params.years_ahead ?? 5
+          );
+          break;
+
+        case 'search_purple_book':
+          result = service.searchPurpleBook(
+            params.drug_name || params.search_term
+          );
+          break;
+
+        case 'get_biosimilar_interchangeability':
+          result = service.getBiosimilarInterchangeability(
+            params.reference_product || params.drug_name || params.search_term
+          );
+          break;
+
+        default:
+          throw new Error(`Unknown Orange/Purple Book method: ${params.method}`);
+      }
+
+      // Report completion
+      this.reportProgress(requestId, {
+        requestId,
+        stage: 'complete',
+        progress: 100,
+        message: 'Query completed successfully',
+        timestamp: new Date().toISOString()
+      });
+
+      const executionTime = Date.now() - startTime;
+
+      return {
+        success: true,
+        data: result,
+        metadata: {
+          executionTime,
+          requestId,
+          fromCache: false,
+          tool: this.toolName,
+          timestamp: new Date().toISOString(),
+          mcpSpecVersion: '2025-06-18'
+        }
+      };
+
+    } catch (error) {
+      const fdaError = errorHandler.handleUnexpectedError(error, 'FdaInfoTool.executeOrangePurpleBookMethod', requestId);
+
+      const wasCancelled = cancellationToken?.isCancelled ||
+                          fdaError.message.includes('cancelled') ||
+                          fdaError.message.includes('aborted');
+
+      return {
+        success: false,
+        error: {
+          error: fdaError.message,
+          code: wasCancelled ? 'OPERATION_CANCELLED' : fdaError.code,
+          success: false
+        },
+        metadata: {
+          executionTime: Date.now() - startTime,
+          requestId,
+          cancelled: wasCancelled
+        }
+      };
+    }
   }
 
   protected async execute(
@@ -33,6 +183,11 @@ export class FdaInfoTool extends BaseTool<FdaRequestParams> {
     const startTime = Date.now();
 
     try {
+      // Check if this is an Orange/Purple Book method
+      if (this.isOrangePurpleBookMethod(params.method)) {
+        return await this.executeOrangePurpleBookMethod(params, requestId, startTime, cancellationToken);
+      }
+
       // Check for cancellation early
       if (cancellationToken?.isCancelled) {
         throw new Error(`Operation cancelled: ${cancellationToken.reason || 'No reason provided'}`);

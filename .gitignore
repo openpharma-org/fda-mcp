@@ -135,3 +135,6 @@ test-results/
 # Temporary test files
 tests/**/*.tmp
 tests/**/*.temp
+
+# Orange/Purple Book data directory (auto-downloaded)
+data/

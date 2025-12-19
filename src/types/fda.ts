@@ -8,7 +8,15 @@ import { z } from 'zod';
 // FDA API Method Types
 // ============================================================================
 
-export type FdaMethod = 'lookup_drug' | 'lookup_device';
+export type FdaMethod =
+  | 'lookup_drug'
+  | 'lookup_device'
+  | 'search_orange_book'
+  | 'get_therapeutic_equivalents'
+  | 'get_patent_exclusivity'
+  | 'analyze_patent_cliff'
+  | 'search_purple_book'
+  | 'get_biosimilar_interchangeability';
 
 export type FdaSearchType =
   | 'general'
@@ -52,6 +60,14 @@ export interface FdaRequestParams {
   fields_for_device_recalls?: string;
   fields_for_device_adverse_events?: string;
   fields_for_device_classification?: string;
+
+  // Orange Book / Purple Book parameters
+  drug_name?: string;
+  nda_number?: string;
+  bla_number?: string;
+  include_generics?: boolean;
+  years_ahead?: number;
+  reference_product?: string;
 }
 
 // ============================================================================

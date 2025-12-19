@@ -1,6 +1,19 @@
 # Unofficial FDA MCP Server
 
-A comprehensive Model Context Protocol (MCP) server that provides advanced pharmaceutical intelligence through the FDA's openFDA database. This server combines real-time data access, intelligent analysis prompts, and executive-level resources to deliver actionable insights for drug safety, regulatory intelligence, competitive analysis, and supply chain risk assessment.
+A comprehensive Model Context Protocol (MCP) server that provides advanced pharmaceutical intelligence through the FDA's openFDA database, Orange Book, and Purple Book. This server combines real-time data access with locally-cached patent, exclusivity, and biosimilar data to deliver actionable insights for:
+
+- **Drug Safety & Adverse Events**: Real-time FAERS data and safety alerts
+- **Patent Intelligence**: Patent cliffs, loss of exclusivity (LOE) analysis, generic entry forecasting
+- **Therapeutic Equivalents**: AB-rated generic alternatives and substitutability
+- **Biosimilar Intelligence**: Biosimilar approvals and interchangeability designations
+- **Regulatory Intelligence**: FDA approvals, recalls, and drug shortages
+- **Competitive Analysis**: Market exclusivity periods and competitive landscape
+
+**Key Features:**
+- **Fast Queries**: <10ms response time for Orange/Purple Book data after initial setup
+- **Auto-Updates**: Automatic monthly data downloads and caching
+- **Comprehensive Coverage**: 47,000+ drug products, 21,000+ patents, 2,000+ biologics
+- **Zero Configuration**: Works out of the box with automatic data downloads
 
 ## **MCP Client Configuration**
 
@@ -16,18 +29,49 @@ A comprehensive Model Context Protocol (MCP) server that provides advanced pharm
 }
 ```
 
+## What's New: Orange Book & Purple Book Integration
+
+This server now includes comprehensive FDA Orange Book and Purple Book data for pharmaceutical intelligence:
+
+### Orange Book (Drug Patents & Generic Equivalents)
+- **47,486 drug products** with approval dates and marketing status
+- **21,126 patents** with expiration dates and use codes
+- **2,444 exclusivity periods** (orphan, pediatric, new clinical studies, etc.)
+- **Therapeutic Equivalence (TE) Codes**: Identify AB-rated generics pharmacists can substitute
+- **Patent Cliff Analysis**: Forecast generic entry dates and loss of exclusivity
+
+### Purple Book (Biologics & Biosimilars)
+- **2,168 biological products** including reference products and biosimilars
+- **Interchangeability designations**: Know which biosimilars can be substituted by pharmacists
+- **Licensing dates and applicants** for all biologics
+- **Reference product mapping**: Links biosimilars to their reference products
+- **Market exclusivity tracking** including orphan drug exclusivity
+
+### Data Management
+- **First-time setup**: ~15-20 seconds to download and build local database
+- **Subsequent queries**: <10ms response time using SQLite with FTS5 full-text search
+- **Auto-refresh**: Database automatically updates when older than 30 days
+- **Data sources**:
+  - Orange Book: Direct from FDA (monthly updates)
+  - Purple Book: Latest available monthly data (works backwards from current month)
+
 ## API Reference
 
 ### Tool: `fda_info`
 
-Unified tool for FDA drug information lookup and safety data.
+Unified tool for FDA drug information lookup, safety data, and pharmaceutical intelligence.
 
 #### Parameters
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `method` | string | Yes | - | Operation type: `lookup_drug` |
-| `search_term` | string | Yes | - | Search term or complex query (supports AND/OR, wildcards, ranges, field combinations) |
+| `method` | string | Yes | - | Operation type: `lookup_drug`, `search_orange_book`, `get_therapeutic_equivalents`, `get_patent_exclusivity`, `analyze_patent_cliff`, `search_purple_book`, `get_biosimilar_interchangeability` |
+| `search_term` | string | Conditional | - | Search term or complex query (supports AND/OR, wildcards, ranges, field combinations) |
+| `drug_name` | string | Conditional | - | Drug name for Orange/Purple Book searches |
+| `nda_number` | string | Conditional | - | NDA number for patent/exclusivity lookup |
+| `reference_product` | string | Conditional | - | Reference product name for biosimilar interchangeability |
+| `include_generics` | boolean | No | true | Include generic products in Orange Book searches |
+| `years_ahead` | integer | No | 5 | Years ahead for patent cliff analysis |
 | `search_type` | string | No | `general` | Type of search: `general`, `label`, `adverse_events`, `recalls`, `shortages` |
 | `fields_for_general` | string | No | - | Specific field for general drug data searches (34 available fields) |
 | `fields_for_adverse_events` | string | No | - | Specific field for adverse events searches (66 available fields) |
@@ -38,7 +82,9 @@ Unified tool for FDA drug information lookup and safety data.
 
 #### Methods
 
-##### Unified Drug Lookup (`lookup_drug`)
+##### OpenFDA API Methods
+
+###### Unified Drug Lookup (`lookup_drug`)
 
 Search for comprehensive drug information with different search types and optional field targeting:
 
@@ -118,6 +164,94 @@ Search for comprehensive drug information with different search types and option
   "limit": 10
 }
 ```
+
+##### Orange Book Methods (Patents & Generic Equivalents)
+
+The Orange Book provides information on drug patents, exclusivity, and therapeutic equivalence. Data is automatically downloaded and cached locally for fast queries (<10ms after initial setup).
+
+###### Search Orange Book (`search_orange_book`)
+
+Search for brand and generic drug products by name:
+
+```json
+{
+  "method": "search_orange_book",
+  "drug_name": "Lipitor",
+  "include_generics": true
+}
+```
+
+Returns brand products and generic alternatives with approval dates, applicants, TE codes, and marketing status.
+
+###### Get Therapeutic Equivalents (`get_therapeutic_equivalents`)
+
+Find AB-rated generic equivalents that are therapeutically equivalent to the reference listed drug:
+
+```json
+{
+  "method": "get_therapeutic_equivalents",
+  "drug_name": "fluoxetine"
+}
+```
+
+Returns the Reference Listed Drug (RLD) plus all AB-rated and non-AB generics. AB-rated generics can be substituted by pharmacists.
+
+###### Get Patent & Exclusivity Data (`get_patent_exclusivity`)
+
+Look up all patents and exclusivity periods for a drug by NDA number:
+
+```json
+{
+  "method": "get_patent_exclusivity",
+  "nda_number": "020702"
+}
+```
+
+Returns active patents with expiration dates, patent use codes, and FDA exclusivity periods.
+
+###### Analyze Patent Cliff (`analyze_patent_cliff`)
+
+Analyze when a drug will lose patent/exclusivity protection and face generic competition:
+
+```json
+{
+  "method": "analyze_patent_cliff",
+  "drug_name": "Trikafta",
+  "years_ahead": 10
+}
+```
+
+Returns patent timeline, next expiration dates, estimated generic entry date, and years until loss of exclusivity (LOE).
+
+##### Purple Book Methods (Biologics & Biosimilars)
+
+The Purple Book provides information on licensed biological products and biosimilar/interchangeable products. Data is automatically downloaded monthly and cached locally.
+
+###### Search Purple Book (`search_purple_book`)
+
+Search for biological products and their biosimilars:
+
+```json
+{
+  "method": "search_purple_book",
+  "drug_name": "adalimumab"
+}
+```
+
+Returns the reference biological product and all approved biosimilars with licensing dates, applicants, and interchangeability status.
+
+###### Get Biosimilar Interchangeability (`get_biosimilar_interchangeability`)
+
+Check which biosimilars are designated as interchangeable (can be substituted by pharmacists):
+
+```json
+{
+  "method": "get_biosimilar_interchangeability",
+  "reference_product": "Humira"
+}
+```
+
+Returns interchangeable biosimilars (pharmacy can substitute without prescriber) and similar but non-interchangeable biosimilars (requires new prescription).
 
 ## Complex Query Syntax
 
@@ -428,6 +562,65 @@ The FDA MCP Server supports powerful openFDA query syntax for advanced searches:
   "limit": 10
 }
 ```
+
+### Orange Book - Patents and Generic Equivalents
+
+```javascript
+// Search for Prozac and its generic equivalents
+{
+  "method": "search_orange_book",
+  "drug_name": "Prozac",
+  "include_generics": true
+}
+
+// Find AB-rated therapeutically equivalent generics for fluoxetine
+{
+  "method": "get_therapeutic_equivalents",
+  "drug_name": "fluoxetine"
+}
+
+// Get patent and exclusivity data for Lipitor (NDA 020702)
+{
+  "method": "get_patent_exclusivity",
+  "nda_number": "020702"
+}
+
+// Analyze patent cliff for Ozempic - when will generics enter?
+{
+  "method": "analyze_patent_cliff",
+  "drug_name": "semaglutide",
+  "years_ahead": 10
+}
+```
+
+### Purple Book - Biologics and Biosimilars
+
+```javascript
+// Search for Humira and all adalimumab biosimilars
+{
+  "method": "search_purple_book",
+  "drug_name": "adalimumab"
+}
+
+// Check which biosimilars are interchangeable with Humira
+{
+  "method": "get_biosimilar_interchangeability",
+  "reference_product": "Humira"
+}
+
+// Find all Dupixent (dupilumab) biosimilars
+{
+  "method": "search_purple_book",
+  "drug_name": "dupilumab"
+}
+```
+
+**Real-World Example Results:**
+
+- **Ozempic (semaglutide)**: 72 active patents, first patent expires Aug 2025, but generic entry estimated Jan 2028 (2.1 years away)
+- **Humira (adalimumab)**: 10 biosimilars approved, only Hyrimoz is interchangeable (since April 2025)
+- **Prozac (fluoxetine)**: All patents expired, 46 AB-rated generic equivalents available
+- **Trikafta**: 109 active patents, orphan exclusivity until 2031, extensive patent protection
 
 ### Available Search Fields
 

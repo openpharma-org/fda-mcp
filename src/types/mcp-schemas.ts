@@ -330,8 +330,19 @@ export const FdaDateRangeSchema = z.string()
  * Includes ALL FDA adverse events API parameters from official documentation
  */
 export const McpFdaRequestParamsSchema = z.object({
-  method: z.enum(['lookup_drug', 'lookup_device'], {
-    errorMap: () => ({ message: 'Method must be either lookup_drug or lookup_device' })
+  method: z.enum([
+    'lookup_drug',
+    'lookup_device',
+    'search_orange_book',
+    'get_therapeutic_equivalents',
+    'get_patent_exclusivity',
+    'analyze_patent_cliff',
+    'search_purple_book',
+    'get_biosimilar_interchangeability'
+  ], {
+    errorMap: () => ({
+      message: 'Method must be one of: lookup_drug, lookup_device, search_orange_book, get_therapeutic_equivalents, get_patent_exclusivity, analyze_patent_cliff, search_purple_book, get_biosimilar_interchangeability'
+    })
   }),
 
   search_term: FdaSearchTermSchema,
@@ -413,7 +424,15 @@ export const McpFdaRequestParamsSchema = z.object({
   fields_for_device_udi: z.string().max(1000).optional(),
   fields_for_device_recalls: z.string().max(1000).optional(),
   fields_for_device_adverse_events: z.string().max(1000).optional(),
-  fields_for_device_classification: z.string().max(1000).optional()
+  fields_for_device_classification: z.string().max(1000).optional(),
+
+  // Orange Book / Purple Book parameters
+  drug_name: z.string().optional(), // For Orange/Purple Book searches
+  nda_number: z.string().optional(), // For patent/exclusivity lookups
+  bla_number: z.string().optional(), // For biologics lookups
+  include_generics: z.boolean().optional(), // Include generic products
+  years_ahead: z.number().int().min(1).max(20).optional(), // For patent cliff analysis
+  reference_product: z.string().optional() // For biosimilar interchangeability
 });
 
 // ============================================================================
