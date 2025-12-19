@@ -47,14 +47,6 @@ This server now includes comprehensive FDA Orange Book and Purple Book data for 
 - **Reference product mapping**: Links biosimilars to their reference products
 - **Market exclusivity tracking** including orphan drug exclusivity
 
-### Data Management
-- **First-time setup**: ~15-20 seconds to download and build local database
-- **Subsequent queries**: <10ms response time using SQLite with FTS5 full-text search
-- **Auto-refresh**: Database automatically updates when older than 30 days
-- **Data sources**:
-  - Orange Book: Direct from FDA (monthly updates)
-  - Purple Book: Latest available monthly data (works backwards from current month)
-
 ## API Reference
 
 ### Tool: `fda_info`
