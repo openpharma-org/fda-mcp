@@ -15,7 +15,7 @@ A comprehensive Model Context Protocol (MCP) server that provides advanced pharm
 - **Comprehensive Coverage**: 47,000+ drug products, 21,000+ patents, 2,000+ biologics
 - **Zero Configuration**: Works out of the box with automatic data downloads
 
-## **MCP Client Configuration**
+## Usage
 
 ```json
 {
