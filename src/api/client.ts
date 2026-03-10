@@ -97,6 +97,9 @@ export class FdaApiClient {
       case 'shortages':
         return `(openfda.generic_name:"${search_term}" OR openfda.brand_name:"${search_term}" OR proprietary_name:"${search_term}" OR generic_name:"${search_term}")`;
 
+      case 'device_pma':
+        return `(trade_name:"${search_term}" OR generic_name:"${search_term}" OR applicant:"${search_term}")`;
+
       case 'general':
       default:
         // For general drug searches, search across all relevant fields
